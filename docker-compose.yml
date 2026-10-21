@@ -1,0 +1,29 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: chronicler-ollama
+    ports:
+      - "127.0.0.1:11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+
+  chronicler:
+    build: .
+    container_name: chronicler
+    environment:
+      CHRONICLER_OLLAMA_BASE_URL: http://ollama:11434
+      CHRONICLER_OLLAMA_MODEL: qwen3.8:latest
+      CHRONICLER_REPO_ROOT: /chronicler
+      CHRONICLER_STATE_PATH: /chronicler/data/state.json
+      CHRONICLER_LEDGER_PATH: /chronicler/data/ledger.sqlite
+      CHRONICLER_RULES_FILE: RULES.json
+      CHRONICLER_LORE_DIR: docs/lore
+    volumes:
+      - ./:/chronicler
+      - chronicler-data:/chronicler/data
+    depends_on:
+      - ollama
+
+volumes:
+  ollama-data:
+  chronicler-data:

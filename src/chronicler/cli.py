@@ -6,6 +6,7 @@ import json
 from typing import Sequence
 
 from chronicler.config import ChroniclerConfig
+from chronicler.ascii_art import print_banner
 from chronicler.docs.synthesizer import DocSynthesizer
 from chronicler.gitops.committer import LocalGitCommitter
 from chronicler.ledger.reader import SqliteEdgeRecordReader
@@ -92,6 +93,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     config = ChroniclerConfig()
+    print_banner()
     if args.command == "run":
         return _cmd_run(build_brain(config), once=args.once)
     if args.command == "watch":

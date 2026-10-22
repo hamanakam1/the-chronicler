@@ -1,6 +1,31 @@
 # The Chronicler
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python: 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/release/python-3120/)
+[![Tests: 23 passing](https://img.shields.io/badge/tests-23-passing-green.svg)](https://github.com/hamanakam1/the-chronicler/actions)
+[![Docker](https://img.shields.io/badge/Docker-ready-ff69b4.svg)](https://github.com/hamanakam1/the-chronicler/blob/main/Dockerfile)
+
 **The memory core of the autonomous AI software factory.**
+
+<div align="center"><sub><b>
+      _     _ ______ _____ _   _ _______ _     _ 
+      | |   | |  ____|_   _| \ | |__   __| |   | | 
+      | |   | | |__    | | |  \| |  | |  | |   | | 
+      | |   | |  __|   | | | . ` |  | |  | |   | | 
+      | |___| | |____ _| |_| |\  |  | |  | |___| | 
+      \_____|_|______|_____|_| \_|  |_|  \_____/
+    </b></sub></div>
+
+<sub><i>The memory core of the autonomous AI software factory.</i></sub>
+
+---
+
+## Core Autonomous Superpowers
+
+1. **Asynchronous Ingest** — continuously polls the EdgeRecord ledger for friction points: failed execution logs, nasty stack traces, and the exact correction prompts that eventually fixed the bug.
+2. **Pattern Extraction** — routes the raw friction through the local LLM (Ollama + Qwen) asking: *"What did the bots mess up, and what's the permanent fix?"*
+3. **Dynamic Rule Hardening** — drafts new architectural rules / prompt context injections (e.g. updates to `RULES.json`, `SKILLS.md`) so the next pipeline run is inherently smarter.
+4. **Lore Synthesis (Auto-Docs)** — translates raw semantic git diffs into human-readable markdown documentation, API maps, and system state records.
 
 The Chronicler is the background daemon that cures *comprehension debt* — the gap where the execution agent (Taskrivet) burns retries figuring out a local network config, then forgets it tomorrow. It is the pipeline's amnesia-buster: an autonomous lore-keeper, meta-learning brain, and documentation engine that watches the append-only **EdgeRecord** ledger, extracts the golden fix from failure logs, hardens the target repository's rules, and commits the upgraded rules plus synthesized lore docs back to local Git — all headless, all local-first, all via local Ollama.
 

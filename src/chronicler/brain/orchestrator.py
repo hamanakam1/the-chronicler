@@ -32,6 +32,7 @@ class CycleReport(BaseModel):
     written_paths: list[str] = Field(default_factory=list)
     receipts: list[CommitReceipt] = Field(default_factory=list)
     skipped_known_heuristics: int = 0
+    failed_audits: list[dict] = Field(default_factory=list)
     error: str | None = None
 
 
@@ -80,50 +81,81 @@ class ChroniclerBrain:
         if not audits:
             state.cycles_completed += 1
             self.state_store.save(state)
+            logger.info("cycle %d: no new failures", state.cycles_completed)
             return report
 
         state.audits_seen += len(audits)
+        logger.info("cycle %d: ingesting %d failure(s)", state.cycles_completed + 1, len(audits))
 
         for audit in audits:
-            raw_payload = await self.llm.ask_for_json(build_extraction_prompt(audit), system=EXTRACTION_SYSTEM_PROMPT)
-            heuristic = self.extractor.extract(audit, raw_payload)
-            report.heuristics.append(heuristic)
-
-            if self.hardener.is_known(heuristic.heuristic_id):
-                report.skipped_known_heuristics += 1
-                continue
-
-            draft = self.hardener.draft(heuristic)
-            doc_payload = await self.synthesizer.synthesize(heuristic, audit)
-            report.doc_payloads.append(doc_payload)
-
-            writes: list[tuple[str, str]] = [
-                (self.config.rules_file, json.dumps(draft.content_json, indent=2, sort_keys=True) + "\n"),
-                (self.config.skills_file, draft.content_markdown),
-            ]
-            for path, content in doc_payload.markdown_by_path.items():
-                writes.append((path, content))
-
-            paths = [path for path, _content in writes]
-            for path, content in writes:
-                written = self.committer.write_text(path, content)
-                report.written_paths.append(str(written))
-            receipt = self.committer.commit(
-                message=f"chore(chronicler): harden {draft.rule_id} from failure {heuristic.source_fingerprint}",
-                paths=paths,
-            )
-            report.receipts.append(receipt)
-
-            self.hardener.register(heuristic.heuristic_id)
-            state.processed_heuristic_ids.append(heuristic.heuristic_id)
-            state.last_commit_sha = receipt.sha
-            state.last_commit_message = receipt.message
-            state.last_commit_at = datetime.now(UTC)
+            try:
+                await self._process_audit(audit, report, state)
+            except Exception as exc:  # noqa: BLE001 - one bad audit must not stop the batch
+                logger.warning(
+                    "chronicler could not learn from failure %s: %s",
+                    audit.fingerprint,
+                    exc,
+                )
+                report.failed_audits.append(
+                    {
+                        "fingerprint": audit.fingerprint,
+                        "audit_id": audit.audit_id,
+                        "task_id": audit.task_id,
+                        "error": str(exc),
+                        "error_type": type(exc).__name__,
+                    }
+                )
 
         state.last_watermark = max((audit.created for audit in audits), default=state.last_watermark)
         state.cycles_completed += 1
         self.state_store.save(state)
+        logger.info(
+            "cycle %d: learned %d heuristic(s), wrote %d file(s), committed %d, skipped %d known, failed %d",
+            state.cycles_completed,
+            len(report.heuristics),
+            len(report.written_paths),
+            len(report.receipts),
+            report.skipped_known_heuristics,
+            len(report.failed_audits),
+        )
         return report
+
+    async def _process_audit(self, audit: ExecutionAuditLog, report: CycleReport, state: ChroniclerState) -> None:
+        """Ingest one battle scar: extract, harden, document, commit."""
+        raw_payload = await self.llm.ask_for_json(build_extraction_prompt(audit), system=EXTRACTION_SYSTEM_PROMPT)
+        heuristic = self.extractor.extract(audit, raw_payload)
+        report.heuristics.append(heuristic)
+
+        if self.hardener.is_known(heuristic.heuristic_id):
+            report.skipped_known_heuristics += 1
+            return
+
+        draft = self.hardener.draft(heuristic)
+        doc_payload = await self.synthesizer.synthesize(heuristic, audit)
+        report.doc_payloads.append(doc_payload)
+
+        writes: list[tuple[str, str]] = [
+            (self.config.rules_file, json.dumps(draft.content_json, indent=2, sort_keys=True) + "\n"),
+            (self.config.skills_file, draft.content_markdown),
+        ]
+        for path, content in doc_payload.markdown_by_path.items():
+            writes.append((path, content))
+
+        paths = [path for path, _content in writes]
+        for path, content in writes:
+            written = self.committer.write_text(path, content)
+            report.written_paths.append(str(written))
+        receipt = self.committer.commit(
+            message=f"chore(chronicler): harden {draft.rule_id} from failure {heuristic.source_fingerprint}",
+            paths=paths,
+        )
+        report.receipts.append(receipt)
+
+        self.hardener.register(heuristic.heuristic_id)
+        state.processed_heuristic_ids.append(heuristic.heuristic_id)
+        state.last_commit_sha = receipt.sha
+        state.last_commit_message = receipt.message
+        state.last_commit_at = datetime.now(UTC)
 
     async def run_forever(self, poll_interval: float | None = None) -> None:
         """Headless daemon loop: poll, think, write, commit, repeat."""

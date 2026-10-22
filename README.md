@@ -3,7 +3,7 @@
 [![CI](https://github.com/hamanakam1/the-chronicler/actions/workflows/ci.yml/badge.svg)](https://github.com/hamanakam1/the-chronicler/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Python: 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/downloads/release/python-3120/)
-[![Tests: 28 passing](https://img.shields.io/badge/tests-28-passing-brightgreen)](https://github.com/hamanakam1/the-chronicler/actions/workflows/ci.yml)
+[![Tests: 40 passing](https://img.shields.io/badge/tests-40-passing-brightgreen)](https://github.com/hamanakam1/the-chronicler/actions/workflows/ci.yml)
 [![Docker](https://img.shields.io/badge/docker-ready-2496ed)](https://github.com/hamanakam1/the-chronicler/blob/main/Dockerfile)
 [![Releases](https://img.shields.io/github/v/release/hamanakam1/the-chronicler)](https://github.com/hamanakam1/the-chronicler/releases)
 
@@ -178,12 +178,20 @@ Every variable can also live in a `.env` file next to the checkout.
 | `chronicler run --once` | Run a single ingest → extract → harden → document → commit cycle and print the report as JSON. |
 | `chronicler watch` | Run the headless daemon loop, polling on `CHRONICLER_POLL_INTERVAL_SECONDS`. |
 
+Global flags work before *or* after the subcommand:
+
+| Flag | Default | What it does |
+| --- | --- | --- |
+| `-q`, `--quiet` | off | Suppress the ASCII banner. |
+| `--log-level` | `info` | Daemon log verbosity: `debug`, `info`, `warning`, `error`, `critical`. |
+
 The ASCII banner is written to **stderr**, so stdout stays machine readable:
 
 ```bash
 chronicler doctor | jq .ollama          # works: stdout is pure JSON
 chronicler doctor --quiet               # no banner at all
 chronicler --quiet doctor               # same thing, flag before the subcommand
+chronicler watch --log-level debug      # verbose daemon log
 ```
 
 ## Architecture
@@ -232,3 +240,10 @@ Module map:
 - Heuristic IDs are deterministically derived from `(failure_category, fingerprint)` so dedupe across cycles is stable.
 - Watermarking via `ChroniclerState` prevents re-processing the same ledger entries.
 - Push is configurable (`CHRONICLER_GIT_PUSH`) and commit receipts are captured per cycle.
+- The ledger reader returns the **oldest** unprocessed failures first, so a backlog drains in order and the watermark never hides an older row behind a newer one.
+- A single unusable failure is isolated: the rest of the batch still lands, and the failure is reported in `failed_audits` rather than aborting the cycle.
+- Writing identical bytes twice is a no-op (`status: "unchanged"`), not a commit error.
+
+## Changelog
+
+Release notes live in [CHANGELOG.md](CHANGELOG.md).

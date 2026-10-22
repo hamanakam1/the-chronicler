@@ -43,7 +43,12 @@ class SqliteEdgeRecordReader:
         return connection
 
     def fetch_new_failures(self, since: datetime | None, limit: int) -> list[ExecutionAuditLog]:
-        """Scoop failure audits newer than `since`, joining task context for the LLM brain."""
+        """Scoop failure audits newer than `since`, joining task context for the LLM brain.
+
+        Rows are returned **oldest first**. The daemon advances a watermark to
+        the newest row it processed, so handing back the newest N rows would
+        hide every older row behind the watermark and skip it forever.
+        """
         effective_limit = max(1, limit)
         connection = None
         try:
@@ -57,7 +62,7 @@ class SqliteEdgeRecordReader:
                 FROM failures f
                 LEFT JOIN tasks t ON t.id = f.task_id
                 WHERE (? IS NULL OR f.created > ?)
-                ORDER BY f.created DESC, f.id DESC
+                ORDER BY f.created ASC, f.id ASC
                 LIMIT ?
                 """,
                 (since_ts, since_ts, effective_limit),

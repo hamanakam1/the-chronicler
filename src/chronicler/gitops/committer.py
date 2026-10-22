@@ -60,7 +60,13 @@ class LocalGitCommitter:
         return target
 
     def commit(self, message: str, paths: list[str]) -> CommitReceipt:
-        """Stage, commit, and (optionally) push the given files. Zero human intervention."""
+        """Stage, commit, and (optionally) push the given files. Zero human intervention.
+
+        Writing the same bytes twice is not an error: the receipt comes back
+        with status ``unchanged`` and the daemon carries on. Git itself exits
+        non-zero with an empty message in that case, so the check is made
+        against the index before the commit is attempted.
+        """
         if not paths:
             return CommitReceipt(message=message, files=[], status="empty")
         add = subprocess.run(
@@ -72,6 +78,16 @@ class LocalGitCommitter:
         )
         if add.returncode != 0:
             raise CommitError(f"git add failed: {add.stderr.strip()}")
+
+        if self._nothing_staged():
+            return CommitReceipt(
+                message=message,
+                files=list(paths),
+                sha=self._head_sha(),
+                pushed=False,
+                status="unchanged",
+            )
+
         commit = subprocess.run(
             ["git", "-c", "user.name=chronicler", "-c", "user.email=chronicler@localhost", "commit", "-m", message],
             cwd=self.repo_root,
@@ -81,15 +97,7 @@ class LocalGitCommitter:
         )
         if commit.returncode != 0:
             raise CommitError(f"git commit failed: {commit.stderr.strip()}")
-        sha = (
-            subprocess.run(
-                ["git", "rev-parse", "HEAD"],
-                cwd=self.repo_root,
-                capture_output=True,
-                text=True,
-                check=True,
-            ).stdout.strip()
-        )
+        sha = self._head_sha()
         pushed = False
         if self.push:
             push_result = subprocess.run(
@@ -103,3 +111,27 @@ class LocalGitCommitter:
             if push_result.returncode != 0:
                 raise CommitError(f"git push failed: {push_result.stderr.strip()}")
         return CommitReceipt(message=message, files=list(paths), sha=sha, pushed=pushed, status="committed")
+
+    def _nothing_staged(self) -> bool:
+        """True when the index holds no changes relative to HEAD."""
+        result = subprocess.run(
+            ["git", "diff", "--cached", "--quiet"],
+            cwd=self.repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        return result.returncode == 0
+
+    def _head_sha(self) -> str | None:
+        """The current HEAD commit sha, or None on an empty repository."""
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=self.repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            return None
+        return result.stdout.strip() or None

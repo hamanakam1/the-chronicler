@@ -3,6 +3,8 @@
 import argparse
 import asyncio
 import json
+import logging
+import sys
 from collections.abc import Sequence
 
 from chronicler.ascii_art import print_banner
@@ -46,6 +48,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         default=argparse.SUPPRESS,
         help="Suppress the ASCII banner. The banner goes to stderr either way, so stdout stays pipeable.",
+    )
+    common.add_argument(
+        "--log-level",
+        choices=["debug", "info", "warning", "error", "critical"],
+        default="info",
+        help="Verbosity of the daemon log on stderr (default: info).",
     )
 
     parser = argparse.ArgumentParser(
@@ -112,10 +120,21 @@ def _cmd_doctor(config: ChroniclerConfig) -> int:
     return 0 if healthy else 1
 
 
+def configure_logging(level: str) -> None:
+    """Send the daemon log to stderr so stdout stays machine readable."""
+    logging.basicConfig(
+        level=getattr(logging, level.upper(), logging.INFO),
+        format="%(asctime)s %(levelname)-8s %(name)s: %(message)s",
+        datefmt="%Y-%m-%dT%H:%M:%S",
+        stream=sys.stderr,
+    )
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     config = ChroniclerConfig()
+    configure_logging(getattr(args, "log_level", "info"))
     if not getattr(args, "quiet", False):
         print_banner()
     if args.command == "run":

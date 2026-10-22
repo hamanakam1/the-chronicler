@@ -1,6 +1,7 @@
 """Tests for the EdgeRecord-backed ledger reader."""
 
 import sqlite3
+from datetime import UTC
 
 from chronicler.errors import LedgerError
 from chronicler.ledger.reader import SqliteEdgeRecordReader
@@ -62,13 +63,13 @@ def test_sqlite_reader_respects_watermark(tmp_path) -> None:
     _make_ledger(ledger)
     reader = SqliteEdgeRecordReader(str(ledger))
 
-    from datetime import datetime, timezone
+    from datetime import datetime
 
-    audits = reader.fetch_new_failures(since=datetime.fromtimestamp(1760000050, tz=timezone.utc), limit=10)
+    audits = reader.fetch_new_failures(since=datetime.fromtimestamp(1760000050, tz=UTC), limit=10)
     assert len(audits) == 1
     assert audits[0].fingerprint == "sha256:deadbeef"
 
-    audits = reader.fetch_new_failures(since=datetime.fromtimestamp(1760000100, tz=timezone.utc), limit=10)
+    audits = reader.fetch_new_failures(since=datetime.fromtimestamp(1760000100, tz=UTC), limit=10)
     assert audits == []
 
 

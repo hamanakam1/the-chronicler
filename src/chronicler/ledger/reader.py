@@ -1,13 +1,12 @@
 """EdgeRecord append-only ledger reader protocol + SQLite implementation."""
 
-from datetime import datetime
 import json
 import sqlite3
+from datetime import datetime
 from typing import Protocol, runtime_checkable
 
 from chronicler.errors import LedgerError
 from chronicler.schemas import ExecutionAuditLog
-
 
 RESOLUTION_EVENT_TYPES = frozenset(
     {

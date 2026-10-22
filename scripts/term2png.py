@@ -14,16 +14,15 @@ from __future__ import annotations
 
 import re
 import subprocess
-import sys
 from dataclasses import dataclass, replace
 from pathlib import Path
 
 try:
     from PIL import Image, ImageDraw, ImageFont
-except ImportError:  # pragma: no cover - developer tooling
+except ImportError as exc:  # pragma: no cover - developer tooling
     raise SystemExit(
         "Pillow is required to render screenshots: python3 -m pip install pillow"
-    )
+    ) from exc
 
 # --------------------------------------------------------------------------
 # palette
@@ -247,7 +246,7 @@ class FontBook:
 def _blend(
     colour: tuple[int, int, int], background: tuple[int, int, int], alpha: float
 ) -> tuple[int, int, int]:
-    return tuple(round(b + (c - b) * alpha) for c, b in zip(colour, background))
+    return tuple(round(b + (c - b) * alpha) for c, b in zip(colour, background, strict=True))
 
 
 def render_window(rows: list[list[Cell]], title: str, fonts: FontBook) -> Image.Image:

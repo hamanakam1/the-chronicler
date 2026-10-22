@@ -1,21 +1,16 @@
 """Shared fakes and factories for The Chronicler test suite."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
-import httpx
 import pytest
 
-from chronicler.brain.extraction import HeuristicExtractor, heuristic_id_for
+from chronicler.brain.extraction import HeuristicExtractor
 from chronicler.brain.orchestrator import ChroniclerBrain
-from chronicler.brain.state import ChroniclerState
 from chronicler.brain.state_store import InMemoryStateStore
 from chronicler.config import ChroniclerConfig
 from chronicler.docs.synthesizer import DocSynthesizer
-from chronicler.gitops.committer import CommitReceipt, LocalGitCommitter
-from chronicler.ledger.reader import EdgeRecordReader, SqliteEdgeRecordReader
-from chronicler.ledger.watcher import EdgeRecordWatcher
-from chronicler.llm.client import OllamaClient
+from chronicler.gitops.committer import CommitReceipt
 from chronicler.rules.hardener import RuleHardener
 from chronicler.schemas import DocUpdatePayload, ExecutionAuditLog, ExtractedHeuristic
 
@@ -24,27 +19,6 @@ DEFAULT_HEURISTIC_PAYLOAD: dict = {
     "generalized_rule": "Resolve the gateway host from the compose file before retrying.",
     "confidence": 0.85,
 }
-
-
-def make_audit(
-    task_id: str = "task-1",
-    category: str = "network_config",
-    fingerprint: str = "sha256:deadbeef",
-    summary: str = "Could not resolve host gateway",
-    resolution: str | None = "Set the gateway manually",
-    created=None,
-) -> ExecutionAuditLog:
-    return ExecutionAuditLog(
-        audit_id="audit-1",
-        task_id=task_id,
-        session_id="sess-1",
-        category=category,
-        fingerprint=fingerprint,
-        summary=summary,
-        resolution=resolution,
-        source="failures",
-        created=created or datetime(2026, 10, 21, 10, 0, 0, tzinfo=timezone.utc),
-    )
 
 
 class FakeLedgerReader:
@@ -160,7 +134,7 @@ def make_audit():
             "summary": "Could not resolve host gateway",
             "resolution": "Set the gateway manually",
             "source": "failures",
-            "created": datetime(2026, 10, 21, 10, 0, 0, tzinfo=timezone.utc),
+            "created": datetime(2026, 10, 21, 10, 0, 0, tzinfo=UTC),
         }
         defaults.update(overrides)
         return ExecutionAuditLog(**defaults)

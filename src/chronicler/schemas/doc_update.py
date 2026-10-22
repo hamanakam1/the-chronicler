@@ -47,4 +47,4 @@ class DocUpdatePayload(BaseModel):
     def markdown_by_path(self) -> dict[str, str]:
         """Map of target path -> generated markdown content."""
         paths = self.target_paths or [f"docs/lore/{self.payload_id}.md"]
-        return {path: self.content_markdown for path in paths}
+        return dict.fromkeys(paths, self.content_markdown)

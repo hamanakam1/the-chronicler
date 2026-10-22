@@ -1,6 +1,6 @@
 """Dynamic rule hardening: drafts new architectural rules from learned heuristics."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class RuleDraft(BaseModel):

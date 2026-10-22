@@ -7,10 +7,10 @@ import httpx
 
 from chronicler.config import ChroniclerConfig
 from chronicler.errors import OllamaError
+from chronicler.llm.prompts import DOC_SYNTHESIS_SYSTEM_PROMPT, build_doc_prompt
 from chronicler.schemas import DocUpdatePayload
 from chronicler.schemas.audit_log import ExecutionAuditLog
 from chronicler.schemas.heuristic import ExtractedHeuristic
-from chronicler.llm.prompts import DOC_SYNTHESIS_SYSTEM_PROMPT, build_doc_prompt
 
 
 def _strip_json_fence(content: str) -> str:

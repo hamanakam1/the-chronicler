@@ -26,9 +26,9 @@ What gets captured:
     ledger, reporting the audits it read, the heuristics it extracted, the
     documents it wrote and the commit receipts it captured.
 
-The Chronicler prints its ASCII banner before every payload. The banner is
-stripped here so the screenshot shows the *result* rather than the wordmark;
-the command line shown above each block is the real command.
+The Chronicler prints its ASCII banner to stderr and its payload to stdout.
+This script shows both, in that order: the wordmark above the result, exactly
+the way a terminal shows them.
 """
 
 from __future__ import annotations
@@ -44,8 +44,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from term2png import FontBook, session  # noqa: E402
 
 
-def run_cli(args: list[str]) -> str:
-    """Run the real CLI and return exactly what it printed."""
+def run_cli(args: list[str]) -> tuple[str, str]:
+    """Run the real CLI and return exactly what it printed.
+
+    Returns ``(stderr, stdout)``: the CLI writes its ASCII banner to stderr
+    and its machine-readable payload to stdout, so the banner can be shown
+    above the result without corrupting it.
+    """
 
     import os
     import subprocess
@@ -62,22 +67,15 @@ def run_cli(args: list[str]) -> str:
         capture_output=True,
         text=True,
     )
-    return completed.stdout + completed.stderr
+    return completed.stderr, completed.stdout
 
 
-def strip_banner(text: str) -> str:
-    """Drop the ASCII banner the CLI prints before its payload.
+def banner_and_payload(args: list[str]) -> str:
+    """The real banner followed by the real payload, in that order."""
 
-    The banner is real output, but it is the wordmark rather than the
-    result, and it would bury the payload under forty lines of art. The
-    payload is the last top-level JSON object the command printed.
-    """
-
-    lines = text.split("\n")
-    for index in range(len(lines) - 1, -1, -1):
-        if lines[index].startswith("{"):
-            return "\n".join(lines[index:])
-    return text
+    banner, payload = run_cli(args)
+    parts = [banner.rstrip("\n"), payload.rstrip("\n")]
+    return "\n".join(part for part in parts if part)
 
 
 def build() -> int:
@@ -86,14 +84,14 @@ def build() -> int:
     written: list[Path] = []
 
     # -- doctor.png -----------------------------------------------------
-    doctor_output = strip_banner(run_cli(["doctor"]))
+    doctor_output = banner_and_payload(["doctor"])
     shot = session("chronicler doctor", [("chronicler doctor", doctor_output)], fonts)
     path = OUTPUT_DIR / "doctor.png"
     shot.save(path, optimize=True)
     written.append(path)
 
     # -- cycle.png ------------------------------------------------------
-    cycle_output = strip_banner(run_cli(["run", "--once"]))
+    cycle_output = banner_and_payload(["run", "--once"])
     shot = session(
         "chronicler run --once",
         [("chronicler run --once", cycle_output)],

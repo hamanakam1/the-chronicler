@@ -1,6 +1,6 @@
 """Data contract tests for The Chronicler's Pydantic schemas."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from pydantic import ValidationError
@@ -20,7 +20,7 @@ def test_execution_audit_log_defaults_and_excerpt() -> None:
         category="network_config",
         fingerprint="sha256:x",
         summary="boom",
-        created=datetime.now(timezone.utc),
+        created=datetime.now(UTC),
     )
     assert audit.resolution is None
     assert audit.source == "failures"
@@ -42,14 +42,14 @@ def test_extracted_heuristic_lifecycle_defaults() -> None:
 
 
 def test_extracted_heuristic_confidence_is_bounded() -> None:
-    base = dict(
-        heuristic_id="heur-abc123",
-        source_fingerprint="sha256:x",
-        task_id="task-1",
-        failure_category="network_config",
-        insight="The bot guessed the gateway.",
-        generalized_rule="Always resolve the gateway from the compose file.",
-    )
+    base = {
+        "heuristic_id": "heur-abc123",
+        "source_fingerprint": "sha256:x",
+        "task_id": "task-1",
+        "failure_category": "network_config",
+        "insight": "The bot guessed the gateway.",
+        "generalized_rule": "Always resolve the gateway from the compose file.",
+    }
     assert ExtractedHeuristic(**base, confidence=1.0).confidence == 1.0
     with pytest.raises(ValidationError):
         ExtractedHeuristic(**base, confidence=1.5)  # type: ignore[arg-type]
@@ -63,8 +63,8 @@ def test_doc_update_payload_targets_default_to_lore_path() -> None:
         content_markdown="# Lore",
     )
     assert payload.format is DocFormat.MARKDOWN
-    assert payload.target_paths == [f"docs/lore/doc-heur-abc123.md"]
-    assert payload.markdown_by_path == {f"docs/lore/doc-heur-abc123.md": "# Lore"}
+    assert payload.target_paths == ["docs/lore/doc-heur-abc123.md"]
+    assert payload.markdown_by_path == {"docs/lore/doc-heur-abc123.md": "# Lore"}
 
 
 def test_doc_update_payload_explicit_targets_are_respected() -> None:

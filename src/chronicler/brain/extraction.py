@@ -8,7 +8,7 @@ from chronicler.schemas.audit_log import ExecutionAuditLog
 
 def heuristic_id_for(fingerprint: str, failure_category: str) -> str:
     """Deterministic heuristic id derived from the failure signature + category."""
-    digest = hashlib.sha1(f"{failure_category}:{fingerprint}".encode("utf-8")).hexdigest()[:12]
+    digest = hashlib.sha1(f"{failure_category}:{fingerprint}".encode()).hexdigest()[:12]
     return f"heur-{digest}"
 
 

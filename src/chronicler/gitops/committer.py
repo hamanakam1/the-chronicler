@@ -1,7 +1,7 @@
 """Local Git & file-system ninja module for The Chronicler."""
 
-from pathlib import Path
 import subprocess
+from pathlib import Path
 
 from pydantic import BaseModel, Field
 

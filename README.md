@@ -3,20 +3,66 @@
 [![CI](https://github.com/hamanakam1/the-chronicler/actions/workflows/ci.yml/badge.svg)](https://github.com/hamanakam1/the-chronicler/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Python: 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/downloads/release/python-3120/)
-[![Tests: 23 passing](https://img.shields.io/badge/tests-23-passing-brightgreen)](https://github.com/hamanakam1/the-chronicler/actions/workflows/ci.yml)
+[![Tests: 28 passing](https://img.shields.io/badge/tests-28-passing-brightgreen)](https://github.com/hamanakam1/the-chronicler/actions/workflows/ci.yml)
 [![Docker](https://img.shields.io/badge/docker-ready-2496ed)](https://github.com/hamanakam1/the-chronicler/blob/main/Dockerfile)
 [![Releases](https://img.shields.io/github/v/release/hamanakam1/the-chronicler)](https://github.com/hamanakam1/the-chronicler/releases)
 
 **The memory core of the autonomous AI software factory.**
 
-<div align="center"><sub><b>
-      _     _ ______ _____ _   _ _______ _     _ 
-      | |   | |  ____|_   _| \ | |__   __| |   | | 
-      | |   | | |__    | | |  \| |  | |  | |   | | 
-      | |   | |  __|   | | | . ` |  | |  | |   | | 
-      | |___| | |____ _| |_| |\  |  | |  | |___| | 
-      \_____|_|______|_____|_| \_|  |_|  \_____/
-    </b></sub></div>
+<div align="center">
+
+```text
+         _          _ _     _ _         
+        | |__   ___| | |__ (_) |_ _   _ 
+        | '_ \ / _ \ | '_ \| | __| | | |
+        | | | |  __/ | | | | | |_| |_| |
+        |_| |_|\___|_|_| |_|\__|\__, |
+                                |___/ 
+```
+
+```text
+                                ____________________
+                           ____/                    \______
+                      ____/                            \______
+                 /                                     \____
+                |   ____________         [] _________    |
+               |  |          |____________|         |   |
+               |  |__________|            |_________|   |
+               |=========================================|
+               |   O                                    O  |
+              |                                          |
+              |                                          |
+              ||=____________________________=|__________|
+               ...........                          ...........
+               .         .                          .         .
+               .  ::     .                          .  ::     .
+               . :::  :  .                          . :::  :  .
+               . :OOOOO  .                          . :OOOOO  .
+               .  OOOOO  .                          .  OOOOO  .
+               .  OOOOO: .                          .  OOOOO: .
+               .  :  ::: .                          .  :  ::: .
+               .     ::  .                          .     ::  .
+               .         .                          .         .
+               '''''''''''                          '''''''''''
+      ==================================================================
+
+
+                                         _     _
+                                        | |   | |
+                                        | |   | |
+                                        | |   | |
+                                _   _ _   _| |__ | |__   ___  _ __   ___  _ __
+                               | | | | | | | '_ \| '_ \ / _ \| '_ \ / _ \| '__|
+                               | |_| | |_| | | | | | | |  _/| | | |  _                                      _       _
+                                \___/ \___/|_| |_|_| |_| |_| |_| |_| |                                     | |     | |
+                                                                                                           | |     | |
+                                                                                                   _   _  | |     | |  _   _
+                                                                                                  | | | | | |     | | | | | |
+                                                                                                  | |_| | | |___  | |_| |_| |
+                                                                                                   \___/  \____/  \___/ \___/
+```
+
+</div>
 
 <sub><i>The memory core of the autonomous AI software factory.</i></sub>
 
@@ -34,13 +80,6 @@ The Chronicler is the background daemon that cures *comprehension debt* — the 
 ## The Mission
 
 > If the bot burned through three retry loops figuring out a local network config, it will make the exact same mistake tomorrow. The Chronicler is the amnesia-buster.
-
-## Core Autonomous Superpowers
-
-1. **Asynchronous Ingest** — continuously polls the EdgeRecord ledger for friction points: failed execution logs, nasty stack traces, and the exact correction prompts that eventually fixed the bug.
-2. **Pattern Extraction** — routes the raw friction through the local LLM (Ollama + Qwen) asking: *"What did the bots mess up, and what's the permanent fix?"*
-3. **Dynamic Rule Hardening** — drafts new architectural rules / prompt context injections (e.g. updates to `RULES.json`, `SKILLS.md`) so the next pipeline run is inherently smarter.
-4. **Lore Synthesis (Auto-Docs)** — translates raw semantic git diffs into human-readable markdown documentation, API maps, and system state records.
 
 ## Execution Environment
 
@@ -81,6 +120,20 @@ docker run --rm ghcr.io/hamanakam1/the-chronicler:0.1.0 doctor
 The image runs as a non-root user. See the
 [package on GitHub](https://github.com/hamanakam1/the-chronicler/pkgs/container/the-chronicler).
 
+### Docker Compose
+
+`docker-compose.yml` brings up Ollama and the Chronicler together, wired to
+each other over the compose network:
+
+```bash
+docker compose up -d          # start ollama + chronicler
+docker compose logs chronicler
+docker compose down
+```
+
+It mounts the checkout at `/chronicler`, keeps the daemon state in the
+`chronicler-data` volume, and points the LLM at the `ollama` service.
+
 ## What it looks like
 
 Both screenshots below are real output, captured by
@@ -102,15 +155,36 @@ read, what it learned and what it committed:
 | --- | --- | --- |
 | `CHRONICLER_OLLAMA_BASE_URL` | `http://localhost:11434` | Local Ollama endpoint |
 | `CHRONICLER_OLLAMA_MODEL` | `qwen3.8:latest` | Local reasoning model |
+| `CHRONICLER_OLLAMA_TIMEOUT_SECONDS` | `120` | Per-request timeout against the local LLM |
 | `CHRONICLER_LEDGER_PATH` | `~/.taskrivet/ledger.sqlite` | Append-only EdgeRecord ledger |
 | `CHRONICLER_REPO_ROOT` | target checkout | Repo receiving hardened rules + docs |
 | `CHRONICLER_RULES_FILE` | `RULES.json` | Hardened ruleset output target |
+| `CHRONICLER_SKILLS_FILE` | `SKILLS.md` | Prompt-context injection output target |
 | `CHRONICLER_LORE_DIR` | `docs/lore` | Generated lore docs location |
+| `CHRONICLER_HEURISTIC_STORE_DIR` | `.chronicler/heuristics` | Local heuristic cache directory |
 | `CHRONICLER_STATE_PATH` | `~/.chronicler/state.json` | Daemon watermark / dedupe state |
 | `CHRONICLER_POLL_INTERVAL_SECONDS` | `30` | Watcher cadence |
 | `CHRONICLER_AUDIT_BATCH_LIMIT` | `25` | Max audits per cycle |
 | `CHRONICLER_GIT_REMOTE` | `origin` | Git remote for zero-intervention push |
 | `CHRONICLER_GIT_PUSH` | `true` | Enable automatic push |
+
+Every variable can also live in a `.env` file next to the checkout.
+
+## CLI
+
+| Command | What it does |
+| --- | --- |
+| `chronicler doctor` | Health check the local setup: Ollama reachable, ledger readable, target repo is a Git repo. Exits non-zero if anything is broken. |
+| `chronicler run --once` | Run a single ingest → extract → harden → document → commit cycle and print the report as JSON. |
+| `chronicler watch` | Run the headless daemon loop, polling on `CHRONICLER_POLL_INTERVAL_SECONDS`. |
+
+The ASCII banner is written to **stderr**, so stdout stays machine readable:
+
+```bash
+chronicler doctor | jq .ollama          # works: stdout is pure JSON
+chronicler doctor --quiet               # no banner at all
+chronicler --quiet doctor               # same thing, flag before the subcommand
+```
 
 ## Architecture
 
@@ -139,6 +213,7 @@ Module map:
 | `chronicler.rules` | `RuleHardener` — drafts hardened rules / prompt injections |
 | `chronicler.docs` | `DocSynthesizer` — turns heuristics into `DocUpdatePayload` |
 | `chronicler.gitops` | `LocalGitCommitter` — safe writes + zero-intervention commit/push |
+| `chronicler.ascii_art` | The lowrider wordmark rendered by the CLI banner |
 | `chronicler.cli` | Headless CLI: `run`, `watch`, `doctor` |
 
 ## Deliverables Implemented

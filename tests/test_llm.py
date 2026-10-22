@@ -11,8 +11,6 @@ from chronicler.config import ChroniclerConfig
 from chronicler.errors import OllamaError
 from chronicler.llm.client import OllamaClient
 from chronicler.llm.prompts import (
-    DOC_SYNTHESIS_SYSTEM_PROMPT,
-    EXTRACTION_SYSTEM_PROMPT,
     THE_PERMANENT_FIX_QUESTION,
     build_doc_prompt,
     build_extraction_prompt,
@@ -84,7 +82,6 @@ def test_ollama_client_error_wraps_http_failure() -> None:
 
 
 def test_ollama_client_ask_raises_on_http_failure() -> None:
-    from chronicler.errors import OllamaError
 
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(500, json={"error": "boom"})

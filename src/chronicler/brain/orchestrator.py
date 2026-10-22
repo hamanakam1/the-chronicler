@@ -2,7 +2,8 @@
 
 import asyncio
 import json
-from datetime import datetime, timezone
+import logging
+from datetime import UTC, datetime
 
 from pydantic import BaseModel, Field
 
@@ -18,8 +19,6 @@ from chronicler.llm.client import OllamaClient
 from chronicler.llm.prompts import EXTRACTION_SYSTEM_PROMPT, build_extraction_prompt
 from chronicler.rules.hardener import RuleHardener
 from chronicler.schemas import DocUpdatePayload, ExecutionAuditLog, ExtractedHeuristic
-
-import logging
 
 logger = logging.getLogger("chronicler")
 
@@ -119,7 +118,7 @@ class ChroniclerBrain:
             state.processed_heuristic_ids.append(heuristic.heuristic_id)
             state.last_commit_sha = receipt.sha
             state.last_commit_message = receipt.message
-            state.last_commit_at = datetime.now(timezone.utc)
+            state.last_commit_at = datetime.now(UTC)
 
         state.last_watermark = max((audit.created for audit in audits), default=state.last_watermark)
         state.cycles_completed += 1

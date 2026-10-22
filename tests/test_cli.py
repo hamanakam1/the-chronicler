@@ -19,7 +19,10 @@ def test_banner_goes_to_stderr_so_stdout_stays_pipeable(capsys):
     exit_code = main(["doctor", "--quiet"])
 
     captured = capsys.readouterr()
-    assert exit_code == 0
+    # The exit code reports whether the environment is healthy: Ollama
+    # reachable, the ledger readable, the target a Git repository. A CI
+    # runner has none of those, so the exit code is not this test's subject.
+    assert exit_code in (0, 1)
     assert CHRONICLER_TAGLINE not in captured.out
     # stdout is pure JSON and parses.
     payload = json.loads(captured.out)

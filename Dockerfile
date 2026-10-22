@@ -6,14 +6,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /chronicler
 
-COPY pyproject.toml README.md ./
+COPY pyproject.toml README.md LICENSE ./
 COPY src ./src
 
-RUN pip install --no-cache-dir .
-
-RUN useradd --create-home --uid 1000 chronicler
+RUN pip install --no-cache-dir . && \
+    useradd --create-home --uid 1000 chronicler && \
+    mkdir -p /chronicler/data && chown chronicler /chronicler/data
 USER chronicler
 
 VOLUME /chronicler/data
 
-CMD ["chronicler", "run"]
+ENTRYPOINT ["chronicler"]
+CMD ["run"]

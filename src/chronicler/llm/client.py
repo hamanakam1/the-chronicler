@@ -29,7 +29,7 @@ def _strip_json_fence(content: str) -> str:
 class OllamaClient:
     """Async client for the local Ollama chat endpoint (OpenAI-compatible /api/chat)."""
 
-    def __init__(self, config: ChroniclerConfig, transport: httpx.AsyncTransport | None = None) -> None:
+    def __init__(self, config: ChroniclerConfig, transport: httpx.AsyncBaseTransport | None = None) -> None:
         self.base_url = config.ollama_base_url.rstrip("/")
         self.model = config.ollama_model
         self.timeout = httpx.Timeout(config.ollama_timeout_seconds)

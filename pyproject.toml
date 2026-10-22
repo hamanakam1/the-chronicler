@@ -19,6 +19,7 @@ chronicler = "chronicler.cli:main"
 dev = [
     "pytest>=7.4",
     "pytest-asyncio>=0.21",
+    "pillow>=10",
 ]
 
 [build-system]

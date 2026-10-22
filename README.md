@@ -69,6 +69,21 @@ chronicler run --once
 chronicler watch
 ```
 
+## What it looks like
+
+Both screenshots below are real output, captured by
+[`scripts/make_screenshots.py`](scripts/make_screenshots.py) — the script drives
+the CLI and paints the bytes it wrote. Nothing is hand-drawn.
+
+`chronicler doctor` reports whether the black-ops setup is actually wired up:
+
+![chronicler doctor, reporting the Ollama, ledger and git checks](docs/screenshots/doctor.png)
+
+`chronicler run --once` runs a single orchestration cycle and reports what it
+read, what it learned and what it committed:
+
+![chronicler run --once, reporting the audits, heuristics and commit receipts](docs/screenshots/cycle.png)
+
 ## Configuration
 
 | Env var | Default | Purpose |

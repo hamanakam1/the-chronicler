@@ -56,8 +56,8 @@ The Chronicler is the background daemon that cures *comprehension debt* — the 
 git clone <target-repo> the-chronicler && cd the-chronicler
 
 # 2. Point it at your local ledger + target repo (env overrides below)
-export CHRONICLER_LEDGER_PATH=/Users/michaelhamanaka/.taskrivet/ledger.sqlite
-export CHRONICLER_REPO_ROOT=/Users/michaelhamanaka/Projects/taskrivet
+export CHRONICLER_LEDGER_PATH=~/.taskrivet/ledger.sqlite
+export CHRONICLER_REPO_ROOT=~/Projects/taskrivet
 
 # 3. Sanity-check the black ops setup
 chronicler doctor
@@ -68,6 +68,18 @@ chronicler run --once
 # 5. Watch the shadows
 chronicler watch
 ```
+
+### Container image
+
+A published image is built and smoke-tested on every release tag.
+
+```bash
+docker pull ghcr.io/hamanakam1/the-chronicler:0.1.0
+docker run --rm ghcr.io/hamanakam1/the-chronicler:0.1.0 doctor
+```
+
+The image runs as a non-root user. See the
+[package on GitHub](https://github.com/hamanakam1/the-chronicler/pkgs/container/the-chronicler).
 
 ## What it looks like
 

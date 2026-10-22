@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "The Chronicler - the local-first memory core of the autonomous AI software factory: watches the EdgeRecord ledger, extracts failure heuristics through local Ollama, and commits hardened rules and lore docs back to Git."
 readme = "README.md"
 requires-python = ">=3.12"
-license = { text = "Proprietary" }
+license = { text = "MIT" }
 authors = [{ name = "Michael Hamanaka" }]
 dependencies = [
     "pydantic>=2.9",
@@ -14,6 +14,12 @@ dependencies = [
 
 [project.scripts]
 chronicler = "chronicler.cli:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "pytest-asyncio>=0.21",
+]
 
 [build-system]
 requires = ["hatchling"]

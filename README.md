@@ -1,9 +1,11 @@
 # The Chronicler
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Python: 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/release/python-3120/)
-[![Tests: 23 passing](https://img.shields.io/badge/tests-23-passing-green.svg)](https://github.com/hamanakam1/the-chronicler/actions)
-[![Docker](https://img.shields.io/badge/Docker-ready-ff69b4.svg)](https://github.com/hamanakam1/the-chronicler/blob/main/Dockerfile)
+[![CI](https://github.com/hamanakam1/the-chronicler/actions/workflows/ci.yml/badge.svg)](https://github.com/hamanakam1/the-chronicler/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Python: 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/downloads/release/python-3120/)
+[![Tests: 23 passing](https://img.shields.io/badge/tests-23-passing-brightgreen)](https://github.com/hamanakam1/the-chronicler/actions/workflows/ci.yml)
+[![Docker](https://img.shields.io/badge/docker-ready-2496ed)](https://github.com/hamanakam1/the-chronicler/blob/main/Dockerfile)
+[![Releases](https://img.shields.io/github/v/release/hamanakam1/the-chronicler)](https://github.com/hamanakam1/the-chronicler/releases)
 
 **The memory core of the autonomous AI software factory.**
 

@@ -1,6 +1,10 @@
 """State persistence for The Chronicler's brain."""
 
+from __future__ import annotations
+
 import json
+import os
+import tempfile
 from pathlib import Path
 from typing import Protocol
 
@@ -41,5 +45,24 @@ class JsonStateStore:
         return ChroniclerState.model_validate(data)
 
     def save(self, state: ChroniclerState) -> None:
+        """Keep the previous checkpoint readable until its replacement is complete."""
+        serialized = json.dumps(state.model_dump(mode="json"), indent=2)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps(state.model_dump(mode="json"), indent=2), encoding="utf-8")
+        temporary_path: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                dir=self.path.parent,
+                prefix=f".{self.path.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as temporary:
+                temporary_path = Path(temporary.name)
+                temporary.write(serialized)
+                temporary.flush()
+                os.fsync(temporary.fileno())
+            temporary_path.replace(self.path)
+        finally:
+            if temporary_path is not None:
+                temporary_path.unlink(missing_ok=True)

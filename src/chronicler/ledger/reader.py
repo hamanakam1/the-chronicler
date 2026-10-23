@@ -54,6 +54,10 @@ class SqliteEdgeRecordReader:
         self.path = path
 
     def _connect(self) -> sqlite3.Connection:
+        # SQLite truncates a filename at a percent-decoded NUL instead of
+        # rejecting it, so encoding alone cannot make this invalid path safe.
+        if "\0" in self.path:
+            raise LedgerError("ledger path must not contain NUL characters")
         # Encode the filename before adding URI options: a literal #, ? or %
         # must not select a different ledger or change the read-only mode.
         uri = Path(self.path).absolute().as_uri()

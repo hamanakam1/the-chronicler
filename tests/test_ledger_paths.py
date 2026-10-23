@@ -62,3 +62,16 @@ def test_missing_path_with_fragment_cannot_read_a_different_ledger(tmp_path: Pat
         SqliteEdgeRecordReader(str(target)).fetch_new_failures(since=None, limit=1)
 
     assert not target.exists()
+
+
+@pytest.mark.parametrize("relative", [False, True], ids=["absolute", "relative"])
+def test_invalid_nul_path_cannot_read_a_truncated_filename(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, relative: bool
+) -> None:
+    target = tmp_path / "ledger.sqlite"
+    _ledger(target, "synthetic-decoy")
+    monkeypatch.chdir(tmp_path)
+    path = (target.name if relative else str(target)) + "\0missing.sqlite"
+
+    with pytest.raises(LedgerError, match="NUL"):
+        SqliteEdgeRecordReader(path).fetch_new_failures(since=None, limit=1)

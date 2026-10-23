@@ -243,6 +243,10 @@ Module map:
 - The ledger reader returns the **oldest** unprocessed failures first, so a backlog drains in order and the watermark never hides an older row behind a newer one.
 - A single unusable failure is isolated: the rest of the batch still lands, and the failure is reported in `failed_audits` rather than aborting the cycle.
 - Writing identical bytes twice is a no-op (`status: "unchanged"`), not a commit error.
+- Commits include only the explicitly requested files, with filenames treated literally.
+  Unrelated staged and unstaged changes are preserved; unchanged generated files do
+  not trigger a commit of someone else's staged work. Commit paths must name files,
+  not directories.
 
 ## Changelog
 

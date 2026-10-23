@@ -1,5 +1,7 @@
 """Local Git & file-system ninja module for The Chronicler."""
 
+from __future__ import annotations
+
 import subprocess
 from pathlib import Path
 
@@ -66,11 +68,19 @@ class LocalGitCommitter:
         with status ``unchanged`` and the daemon carries on. Git itself exits
         non-zero with an empty message in that case, so the check is made
         against the index before the commit is attempted.
+        Only the requested literal files participate: another caller's staged
+        changes must remain staged, including when these files are unchanged.
         """
         if not paths:
             return CommitReceipt(message=message, files=[], status="empty")
+        # Validate the complete request before staging anything. A directory
+        # would implicitly select files the caller never explicitly requested.
+        for path in paths:
+            target = self._resolve(path)
+            if target == self.repo_root or target.is_dir():
+                raise UnsafePathError(f"commit requires an explicit file path: {path}")
         add = subprocess.run(
-            ["git", "add", "--", *paths],
+            ["git", "--literal-pathspecs", "add", "--", *paths],
             cwd=self.repo_root,
             capture_output=True,
             text=True,
@@ -79,7 +89,7 @@ class LocalGitCommitter:
         if add.returncode != 0:
             raise CommitError(f"git add failed: {add.stderr.strip()}")
 
-        if self._nothing_staged():
+        if self._nothing_staged(paths):
             return CommitReceipt(
                 message=message,
                 files=list(paths),
@@ -89,7 +99,11 @@ class LocalGitCommitter:
             )
 
         commit = subprocess.run(
-            ["git", "-c", "user.name=chronicler", "-c", "user.email=chronicler@localhost", "commit", "-m", message],
+            [
+                "git", "--literal-pathspecs",
+                "-c", "user.name=chronicler", "-c", "user.email=chronicler@localhost",
+                "commit", "--only", "-m", message, "--", *paths,
+            ],
             cwd=self.repo_root,
             capture_output=True,
             text=True,
@@ -112,15 +126,17 @@ class LocalGitCommitter:
                 raise CommitError(f"git push failed: {push_result.stderr.strip()}")
         return CommitReceipt(message=message, files=list(paths), sha=sha, pushed=pushed, status="committed")
 
-    def _nothing_staged(self) -> bool:
-        """True when the index holds no changes relative to HEAD."""
+    def _nothing_staged(self, paths: list[str]) -> bool:
+        """Ignore unrelated staged work when deciding whether a commit is needed."""
         result = subprocess.run(
-            ["git", "diff", "--cached", "--quiet"],
+            ["git", "--literal-pathspecs", "diff", "--cached", "--quiet", "--", *paths],
             cwd=self.repo_root,
             capture_output=True,
             text=True,
             check=False,
         )
+        if result.returncode not in (0, 1):
+            raise CommitError(f"git diff failed: {result.stderr.strip()}")
         return result.returncode == 0
 
     def _head_sha(self) -> str | None:

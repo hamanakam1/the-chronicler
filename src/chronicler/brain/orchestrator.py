@@ -1,5 +1,7 @@
 """The Chronicler's meta-learning brain: core orchestration loop."""
 
+from __future__ import annotations
+
 import asyncio
 import json
 import logging
@@ -13,7 +15,7 @@ from chronicler.brain.state_store import StateStore
 from chronicler.config import ChroniclerConfig
 from chronicler.docs.synthesizer import DocSynthesizer
 from chronicler.gitops.committer import CommitReceipt, LocalGitCommitter
-from chronicler.ledger.reader import EdgeRecordReader
+from chronicler.ledger.reader import EdgeRecordReader, failure_id_for
 from chronicler.ledger.watcher import EdgeRecordWatcher
 from chronicler.llm.client import OllamaClient
 from chronicler.llm.prompts import EXTRACTION_SYSTEM_PROMPT, build_extraction_prompt
@@ -76,7 +78,11 @@ class ChroniclerBrain:
         for processed_id in state.processed_heuristic_ids:
             self.hardener.register(processed_id)
 
-        audits = await self.watcher.poll_once(since=state.last_watermark, limit=self.config.audit_batch_limit)
+        audits = await self.watcher.poll_once(
+            since=state.last_watermark,
+            limit=self.config.audit_batch_limit,
+            after_failure_id=state.last_watermark_failure_id,
+        )
         report.audits = audits
         if not audits:
             state.cycles_completed += 1
@@ -106,7 +112,10 @@ class ChroniclerBrain:
                     }
                 )
 
-        state.last_watermark = max((audit.created for audit in audits), default=state.last_watermark)
+        # Reader ordering includes the numeric ID tie breaker. Taking its last
+        # row also preserves ordering when distinct REAL timestamps round alike.
+        state.last_watermark = audits[-1].created
+        state.last_watermark_failure_id = failure_id_for(audits[-1])
         state.cycles_completed += 1
         self.state_store.save(state)
         logger.info(

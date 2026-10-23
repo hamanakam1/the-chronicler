@@ -238,7 +238,7 @@ Module map:
 
 - Path-traversal guard in the committer (`UnsafePathError`) before any write.
 - Heuristic IDs are deterministically derived from `(failure_category, fingerprint)` so dedupe across cycles is stable.
-- Watermarking via `ChroniclerState` prevents re-processing the same ledger entries.
+- Watermarking via `ChroniclerState` persists the UTC timestamp and numeric failure ID, so bounded batches resume within a shared timestamp without skipping rows, including after restart. Existing timestamp-only state keeps its strictly-newer behavior until the next batch establishes an ID cursor; previously skipped rows are not recovered automatically.
 - Push is configurable (`CHRONICLER_GIT_PUSH`) and commit receipts are captured per cycle.
 - The ledger reader returns the **oldest** unprocessed failures first, so a backlog drains in order and the watermark never hides an older row behind a newer one.
 - A single unusable failure is isolated: the rest of the batch still lands, and the failure is reported in `failed_audits` rather than aborting the cycle.

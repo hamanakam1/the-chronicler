@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import subprocess
 import tempfile
 import unicodedata
@@ -11,6 +12,8 @@ from pydantic import BaseModel, Field
 
 from chronicler.errors import CommitError, UnsafePathError
 
+logger = logging.getLogger("chronicler")
+
 
 class CommitReceipt(BaseModel):
     """Result of a local git commit (and optional push) performed by the committer."""
@@ -19,6 +22,7 @@ class CommitReceipt(BaseModel):
     files: list[str] = Field(default_factory=list)
     sha: str | None = None
     pushed: bool = False
+    push_error: str | None = None
     status: str = "committed"
 
 
@@ -257,18 +261,30 @@ class LocalGitCommitter:
             raise CommitError(f"git commit failed: {commit.stderr.strip()}")
         sha = self._head_sha()
         pushed = False
+        push_error = None
         if self.push:
-            push_result = subprocess.run(
-                ["git", "push", self.remote, "HEAD"],
-                cwd=self.repo_root,
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            pushed = push_result.returncode == 0
-            if push_result.returncode != 0:
-                raise CommitError(f"git push failed: {push_result.stderr.strip()}")
-        return CommitReceipt(message=message, files=list(paths), sha=sha, pushed=pushed, status="committed")
+            try:
+                push_result = subprocess.run(
+                    ["git", "push", self.remote, "HEAD"],
+                    cwd=self.repo_root,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+            except OSError as exc:
+                push_error = f"git push failed: {exc}"
+            else:
+                pushed = push_result.returncode == 0
+                if not pushed:
+                    detail = push_result.stderr.strip() or push_result.stdout.strip() or f"exit code {push_result.returncode}"
+                    push_error = f"git push failed: {detail}"
+            if push_error is not None:
+                # Local success must remain checkpointable even when delivery fails.
+                logger.warning("local commit %s completed; %s", sha, push_error)
+        return CommitReceipt(
+            message=message, files=list(paths), sha=sha, pushed=pushed,
+            push_error=push_error, status="committed",
+        )
 
     def _is_tracked_file(self, path: str) -> bool:
         """Reject tracked subtrees even if the worktree replaces one with a file."""

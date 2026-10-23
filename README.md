@@ -243,6 +243,11 @@ Module map:
   row. Custom readers without canonical numeric failure IDs retain timestamp-only
   behavior.
 - Push is configurable (`CHRONICLER_GIT_PUSH`) and commit receipts are captured per cycle.
+  A successful local commit remains reported and checkpointed if its push fails:
+  the receipt keeps `status: "committed"` and the local SHA, sets `pushed: false`,
+  and records the delivery failure in `push_error` (also logged as a warning).
+  Failed pushes are not retried automatically; actual local commit failures still
+  fail the audit.
 - The ledger reader returns the **oldest** unprocessed failures first, so a backlog drains in order and the watermark never hides an older row behind a newer one.
 - A single unusable failure is isolated: the rest of the batch still lands, and the failure is reported in `failed_audits` rather than aborting the cycle.
 - Writing identical bytes twice is a no-op (`status: "unchanged"`), not a commit error.

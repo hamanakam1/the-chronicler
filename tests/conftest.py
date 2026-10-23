@@ -85,6 +85,9 @@ class FakeCommitter:
         self.writes: list[tuple[str, str]] = []
         self.commit_calls: list[tuple[str, list[str]]] = []
 
+    def validate_write_paths(self, paths: list[str]) -> None:
+        pass
+
     def write_text(self, path: str, content: str):
         self.writes.append((path, content))
         return type("P", (), {"__str__": lambda self: path})()

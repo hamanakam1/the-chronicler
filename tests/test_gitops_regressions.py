@@ -226,7 +226,7 @@ def test_file_replacing_tracked_directory_cannot_commit_its_children(
     first = committer.commit("baseline", ["docs/generated.md", "docs/unrelated.md"])
     preserved = tmp_path / "preserved-docs"
     (repo / "docs").rename(preserved)
-    committer.write_text("docs", "replacement file")
+    (repo / "docs").write_text("replacement file", encoding="utf-8")
     if staged:
         _git(repo, "add", "--", "docs")
     index_before = _git(repo, "diff", "--cached")

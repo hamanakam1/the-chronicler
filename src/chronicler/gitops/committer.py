@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import subprocess
 import tempfile
+import unicodedata
 from pathlib import Path
 
 from pydantic import BaseModel, Field
@@ -43,19 +44,127 @@ class LocalGitCommitter:
         except OSError:
             return False
 
-    def _resolve(self, path: str) -> Path:
+    def _resolve(self, path: str, *, allow_leaf_symlink: bool = False) -> Path:
         candidate = Path(path)
-        if candidate.is_absolute() or ".." in candidate.parts:
+        if candidate.is_absolute() or ".." in candidate.parts or "\0" in path:
             raise UnsafePathError(f"refusing unsafe path outside target repo: {path}")
-        resolved = (self.repo_root / candidate).resolve()
-        root = self.repo_root.resolve()
-        if resolved != root and root not in resolved.parents:
-            raise UnsafePathError(f"refusing unsafe path outside target repo: {path}")
-        return resolved
+        if any(part.casefold() == ".git" for part in candidate.parts):
+            raise UnsafePathError(f"refusing Git metadata path: {path}")
+        if not candidate.parts:
+            raise UnsafePathError(f"output requires an explicit file path: {path}")
+        target = self.repo_root
+        for index, part in enumerate(candidate.parts):
+            if target.is_dir():
+                key = unicodedata.normalize("NFC", part).casefold()
+                for entry in target.iterdir():
+                    if entry.name != part and unicodedata.normalize("NFC", entry.name).casefold() == key:
+                        # Git's literal path selection can differ from the
+                        # filesystem's case-insensitive lookup of the same file.
+                        raise UnsafePathError(f"output path aliases existing entry {entry.name}: {path}")
+            target = target / part
+            is_leaf = index == len(candidate.parts) - 1
+            if target.is_symlink():
+                if is_leaf and allow_leaf_symlink:
+                    continue
+                raise UnsafePathError(f"refusing symlink in output path: {path}")
+            if not is_leaf and target.exists() and not target.is_dir():
+                raise UnsafePathError(f"output parent is not a directory: {path}")
+            if not is_leaf and ((target / ".git").exists() or (target / ".git").is_symlink()):
+                raise UnsafePathError(f"refusing nested Git repository in output path: {path}")
+        return target
+
+    def _git_metadata_paths(self) -> list[Path]:
+        """Separate Git directories need protection even when they are not named .git."""
+        metadata_paths: list[Path] = []
+        for option in ("--absolute-git-dir", "--git-common-dir"):
+            result = subprocess.run(
+                ["git", "rev-parse", option], cwd=self.repo_root,
+                capture_output=True, text=True, check=False,
+            )
+            if result.returncode != 0:
+                raise CommitError(f"git path inspection failed: {result.stderr.strip()}")
+            metadata_paths.append((self.repo_root / result.stdout.removesuffix("\n")).resolve())
+        return metadata_paths
+
+    def _reject_git_metadata(self, target: Path, metadata_paths: list[Path]) -> None:
+        for metadata in metadata_paths:
+            if target == metadata or metadata in target.parents:
+                raise UnsafePathError(f"refusing Git metadata path: {target}")
+            # samefile also recognizes case/Unicode aliases on Mac filesystems.
+            for ancestor in (target, *target.parents):
+                if ancestor == self.repo_root.parent:
+                    break
+                if ancestor.exists() and metadata.exists() and ancestor.samefile(metadata):
+                    raise UnsafePathError(f"refusing Git metadata path: {target}")
+
+    def _reject_gitlink_ancestors(self, paths: list[str]) -> None:
+        """An uninitialized or deleted submodule still belongs to a different repository."""
+        ancestors = sorted({str(parent) for path in paths for parent in Path(path).parents if parent != Path(".")})
+        if not ancestors:
+            return
+        commands = [["ls-files", "--stage", "-z", "--", *ancestors]]
+        if self._head_sha() is not None:
+            commands.append(["ls-tree", "-r", "-z", "HEAD", "--", *ancestors])
+        normalized_paths = [str(Path(path)).casefold() for path in paths]
+        for args in commands:
+            result = subprocess.run(
+                ["git", "--literal-pathspecs", *args], cwd=self.repo_root,
+                capture_output=True, text=True, check=False,
+            )
+            if result.returncode != 0:
+                raise CommitError(f"git path inspection failed: {result.stderr.strip()}")
+            for entry in result.stdout.split("\0"):
+                metadata, _, name = entry.partition("\t")
+                if metadata.split(" ", 1)[0] == "160000" and any(
+                    path.startswith(name.casefold() + "/") for path in normalized_paths
+                ):
+                    raise UnsafePathError(f"refusing output inside tracked submodule: {name}")
+
+    def validate_write_paths(self, paths: list[str], *, require_repository: bool = True) -> list[Path]:
+        """Reject the complete output plan before any existing content is replaced."""
+        targets = [self._resolve(path) for path in paths]
+        keys: list[tuple[str, ...]] = []
+        for path, target in zip(paths, targets, strict=True):
+            # Conservative portability: case/Unicode-only distinctions are not
+            # independent output files on common Mac filesystems.
+            key = tuple(unicodedata.normalize("NFC", part).casefold() for part in target.relative_to(self.repo_root).parts)
+            for previous in keys:
+                if key == previous or key[: len(previous)] == previous or previous[: len(key)] == key:
+                    raise UnsafePathError(f"duplicate or overlapping output paths: {path}")
+            keys.append(key)
+            if target.exists() and not target.is_file():
+                raise UnsafePathError(f"output requires an explicit regular file path: {path}")
+        in_repository = self.is_repo() if targets else False
+        if targets and not in_repository and (require_repository or (self.repo_root / ".git").exists()):
+            raise CommitError("generated output plan requires a usable Git worktree")
+        metadata_paths = self._git_metadata_paths() if in_repository else []
+        if in_repository:
+            self._reject_gitlink_ancestors(paths)
+            self._reject_ignored_paths(paths)
+        for path, target in zip(paths, targets, strict=True):
+            self._reject_git_metadata(target, metadata_paths)
+            if in_repository:
+                self._is_tracked_file(path)
+        return targets
+
+    def _reject_ignored_paths(self, paths: list[str]) -> None:
+        """Ignored output would be replaced but could not enter the generated commit."""
+        # check-ignore rejects all pathspec magic, including --literal-pathspecs.
+        # A relative prefix keeps colon-prefixed filenames out of that parser.
+        literal_paths = [f"./{Path(path).as_posix()}" for path in paths]
+        result = subprocess.run(
+            ["git", "check-ignore", "--stdin", "-z"], cwd=self.repo_root,
+            input="\0".join(literal_paths) + "\0", capture_output=True, text=True, check=False,
+        )
+        if result.returncode == 0:
+            ignored_path = result.stdout.split("\0", 1)[0]
+            raise UnsafePathError(f"generated output is ignored by Git: {ignored_path}")
+        if result.returncode != 1:
+            raise CommitError(f"git ignore inspection failed: {result.stderr.strip()}")
 
     def write_text(self, path: str, content: str) -> Path:
         """Atomically write LLM-generated content into the target repo."""
-        target = self._resolve(path)
+        target = self.validate_write_paths([path], require_repository=False)[0]
         target.parent.mkdir(parents=True, exist_ok=True)
         temporary_path: Path | None = None
         try:
@@ -87,12 +196,15 @@ class LocalGitCommitter:
             return CommitReceipt(message=message, files=[], status="empty")
         # Validate the complete request before staging anything. A directory
         # would implicitly select files the caller never explicitly requested.
-        for path in paths:
-            target = self._resolve(path)
-            if target == self.repo_root or target.is_dir():
+        targets = [self._resolve(path, allow_leaf_symlink=True) for path in paths]
+        metadata_paths = self._git_metadata_paths()
+        self._reject_gitlink_ancestors(paths)
+        for path, target in zip(paths, targets, strict=True):
+            self._reject_git_metadata(target, metadata_paths)
+            if target.is_dir() and not target.is_symlink():
                 raise UnsafePathError(f"commit requires an explicit file path: {path}")
             tracked_file = self._is_tracked_file(path)
-            if not target.exists() and not tracked_file:
+            if not target.exists() and not target.is_symlink() and not tracked_file:
                 raise UnsafePathError(f"commit requires an explicit file path: {path}")
         deleted = subprocess.run(
             ["git", "--literal-pathspecs", "diff", "--cached", "--name-only", "--diff-filter=D", "-z", "--", *paths],

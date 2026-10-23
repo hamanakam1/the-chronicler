@@ -253,6 +253,20 @@ Module map:
 - State checkpoints use a unique temporary file and atomic replacement. An interrupted
   write or failed replacement preserves the previous readable checkpoint.
 
+Generated output paths are checked as a complete plan before any file is written.
+They must name distinct regular files in a usable Git worktree, with no symlink
+components, Git metadata targets, nested repository/submodule traversal, tracked
+directory replacements, or file/parent overlaps. Names that differ only by case or
+Unicode normalization are treated as the same output for Mac filesystem compatibility,
+including aliases of existing files or directories. Untracked outputs ignored by Git
+are rejected before writing; tracked files remain writable even when an ignore rule
+matches them. Explicit Git commits may still record a symlink itself or its deletion;
+generated content never follows the link.
+This preflight preserves existing files when a plan is invalid. It is not a
+transaction across files: a later I/O or Git failure can leave earlier valid writes.
+The standalone `write_text` helper also supports ordinary directories without Git;
+the brain's full output plan requires a usable Git worktree before it writes.
+
 ### Current rule-output limitation
 
 Each successfully processed heuristic **replaces** the configured `RULES.json` and

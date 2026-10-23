@@ -151,6 +151,7 @@ class ChroniclerBrain:
             writes.append((path, content))
 
         paths = [path for path, _content in writes]
+        self.committer.validate_write_paths(paths)
         for path, content in writes:
             written = self.committer.write_text(path, content)
             report.written_paths.append(str(written))

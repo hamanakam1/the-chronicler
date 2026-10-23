@@ -250,6 +250,12 @@ Module map:
   fail the audit.
 - The ledger reader returns the **oldest** unprocessed failures first, so a backlog drains in order and the watermark never hides an older row behind a newer one.
 - A single unusable failure is isolated: the rest of the batch still lands, and the failure is reported in `failed_audits` rather than aborting the cycle.
+- Ollama responses must be completed objects with `done: true`, an object-valued
+  `message`, and string-valued `content`. Missing or non-boolean completion markers
+  and any envelope containing an `error` field are rejected as `OllamaError`, even
+  when HTTP returns 200 and the content looks like valid rule JSON. Plain text and
+  fenced JSON remain supported; `ask` also accepts empty text, while `ask_for_json`
+  still requires a JSON object.
 - Writing identical bytes twice is a no-op (`status: "unchanged"`), not a commit error.
 - Commits include only the explicitly requested files, with filenames treated literally.
   Unrelated staged and unstaged changes are preserved; unchanged generated files do

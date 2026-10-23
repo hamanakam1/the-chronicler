@@ -1,5 +1,7 @@
 """Local LLM brain: Ollama client + prompt construction for The Chronicler."""
 
+from __future__ import annotations
+
 import json
 from typing import Any
 
@@ -72,10 +74,22 @@ class OllamaClient:
         except ValueError as exc:
             raise OllamaError(f"local Ollama returned malformed response: {exc}") from exc
 
-        message = data.get("message") or {}
-        content = message.get("content") or ""
+        if not isinstance(data, dict):
+            raise OllamaError("local Ollama response was not an object")
+        if "error" in data:
+            raise OllamaError("local Ollama returned an error response")
+        # A partial answer can contain valid JSON while still being unsuitable
+        # for persistent rules. Non-streaming requests require explicit completion.
+        if data.get("done") is not True:
+            raise OllamaError("local Ollama response was not explicitly completed")
+        message = data.get("message")
+        if not isinstance(message, dict):
+            raise OllamaError("local Ollama response message was not an object")
+        content = message.get("content")
+        if not isinstance(content, str):
+            raise OllamaError("local Ollama response content was not a string")
         if json_mode:
-            content = _strip_json_fence(str(content))
+            content = _strip_json_fence(content)
         return content
 
     async def ask_for_json(self, prompt: str, system: str | None = None) -> dict[str, Any]:

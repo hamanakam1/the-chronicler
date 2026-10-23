@@ -212,3 +212,29 @@ def test_interrupted_generated_write_preserves_previous_content(
 
     assert target.read_text(encoding="utf-8") == "previous generated content"
     assert list(tmp_path.iterdir()) == [target]
+
+
+@pytest.mark.parametrize("staged", [False, True])
+def test_file_replacing_tracked_directory_cannot_commit_its_children(
+    tmp_path: Path, staged: bool
+) -> None:
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    committer = LocalGitCommitter(str(repo), push=False)
+    committer.write_text("docs/generated.md", "generated content")
+    committer.write_text("docs/unrelated.md", "user content")
+    first = committer.commit("baseline", ["docs/generated.md", "docs/unrelated.md"])
+    preserved = tmp_path / "preserved-docs"
+    (repo / "docs").rename(preserved)
+    committer.write_text("docs", "replacement file")
+    if staged:
+        _git(repo, "add", "--", "docs")
+    index_before = _git(repo, "diff", "--cached")
+
+    with pytest.raises(UnsafePathError, match="tracked directory"):
+        committer.commit("implicit subtree deletion", ["docs"])
+
+    assert _git(repo, "rev-parse", "HEAD") == first.sha
+    assert _git(repo, "diff", "--cached") == index_before
+    assert (preserved / "generated.md").read_text(encoding="utf-8") == "generated content"
+    assert (preserved / "unrelated.md").read_text(encoding="utf-8") == "user content"

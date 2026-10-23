@@ -89,11 +89,10 @@ class LocalGitCommitter:
         # would implicitly select files the caller never explicitly requested.
         for path in paths:
             target = self._resolve(path)
-            if (
-                target == self.repo_root
-                or target.is_dir()
-                or (not target.exists() and not self._is_tracked_file(path))
-            ):
+            if target == self.repo_root or target.is_dir():
+                raise UnsafePathError(f"commit requires an explicit file path: {path}")
+            tracked_file = self._is_tracked_file(path)
+            if not target.exists() and not tracked_file:
                 raise UnsafePathError(f"commit requires an explicit file path: {path}")
         deleted = subprocess.run(
             ["git", "--literal-pathspecs", "diff", "--cached", "--name-only", "--diff-filter=D", "-z", "--", *paths],
@@ -160,9 +159,10 @@ class LocalGitCommitter:
         return CommitReceipt(message=message, files=list(paths), sha=sha, pushed=pushed, status="committed")
 
     def _is_tracked_file(self, path: str) -> bool:
-        """Allow explicit deletions without expanding a missing directory to its children."""
+        """Reject tracked subtrees even if the worktree replaces one with a file."""
         normalized = Path(path).as_posix()
         commands = [["ls-files", "--stage", "-z", "--", path]]
+        found = False
         if self._head_sha() is not None:
             # Staged deletions have left the index but still name a file in HEAD.
             commands.append(["ls-tree", "-z", "HEAD", "--", path])
@@ -178,9 +178,14 @@ class LocalGitCommitter:
                 raise CommitError(f"git path inspection failed: {result.stderr.strip()}")
             for entry in result.stdout.split("\0"):
                 metadata, _, name = entry.partition("\t")
-                if name == normalized and metadata.split(" ", 1)[0] in {"100644", "100755", "120000"}:
-                    return True
-        return False
+                mode = metadata.split(" ", 1)[0]
+                if name.startswith(normalized + "/") or (
+                    name == normalized and mode in {"040000", "160000"}
+                ):
+                    raise UnsafePathError(f"commit requires an explicit file, not a tracked directory: {path}")
+                if name == normalized and mode in {"100644", "100755", "120000"}:
+                    found = True
+        return found
 
     def _nothing_staged(self, paths: list[str]) -> bool:
         """Ignore unrelated staged work when deciding whether a commit is needed."""

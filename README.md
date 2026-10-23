@@ -239,6 +239,9 @@ Module map:
 - Path-traversal guard in the committer (`UnsafePathError`) before any write.
 - Heuristic IDs are deterministically derived from `(failure_category, fingerprint)` so dedupe across cycles is stable.
 - Watermarking via `ChroniclerState` persists the UTC timestamp and numeric failure ID, so bounded batches resume within a shared timestamp without skipping rows, including after restart. Existing timestamp-only state keeps its strictly-newer behavior until the next batch establishes an ID cursor; previously skipped rows are not recovered automatically.
+  Cursor precision relies on the append-only ledger retaining the boundary failure
+  row. Custom readers without canonical numeric failure IDs retain timestamp-only
+  behavior.
 - Push is configurable (`CHRONICLER_GIT_PUSH`) and commit receipts are captured per cycle.
 - The ledger reader returns the **oldest** unprocessed failures first, so a backlog drains in order and the watermark never hides an older row behind a newer one.
 - A single unusable failure is isolated: the rest of the batch still lands, and the failure is reported in `failed_audits` rather than aborting the cycle.
@@ -247,6 +250,17 @@ Module map:
   Unrelated staged and unstaged changes are preserved; unchanged generated files do
   not trigger a commit of someone else's staged work. Commit paths must name files,
   not directories.
+- State checkpoints use a unique temporary file and atomic replacement. An interrupted
+  write or failed replacement preserves the previous readable checkpoint.
+
+### Current rule-output limitation
+
+Each successfully processed heuristic **replaces** the configured `RULES.json` and
+`SKILLS.md` outputs. These files contain the latest heuristic; previous rules and
+handwritten content at those paths are not merged or retained. Set
+`CHRONICLER_RULES_FILE` and `CHRONICLER_SKILLS_FILE` to dedicated generated files.
+Lore documents use a separate path per heuristic. Cumulative rule merging remains
+unimplemented.
 
 ## Changelog
 

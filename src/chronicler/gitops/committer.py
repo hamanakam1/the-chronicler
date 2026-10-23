@@ -77,17 +77,38 @@ class LocalGitCommitter:
         # would implicitly select files the caller never explicitly requested.
         for path in paths:
             target = self._resolve(path)
-            if target == self.repo_root or target.is_dir():
+            if (
+                target == self.repo_root
+                or target.is_dir()
+                or (not target.exists() and not self._is_tracked_file(path))
+            ):
                 raise UnsafePathError(f"commit requires an explicit file path: {path}")
-        add = subprocess.run(
-            ["git", "--literal-pathspecs", "add", "--", *paths],
+        deleted = subprocess.run(
+            ["git", "--literal-pathspecs", "diff", "--cached", "--name-only", "--diff-filter=D", "-z", "--", *paths],
             cwd=self.repo_root,
             capture_output=True,
             text=True,
             check=False,
         )
-        if add.returncode != 0:
-            raise CommitError(f"git add failed: {add.stderr.strip()}")
+        if deleted.returncode != 0:
+            raise CommitError(f"git diff failed: {deleted.stderr.strip()}")
+        staged_deletions = set(deleted.stdout.split("\0"))
+        to_add = [
+            path for path in paths
+            if (self.repo_root / path).exists() or Path(path).as_posix() not in staged_deletions
+        ]
+        # A staged deletion is already absent from both the index and disk;
+        # asking git add for it again would fail before the commit can record it.
+        if to_add:
+            add = subprocess.run(
+                ["git", "--literal-pathspecs", "add", "--", *to_add],
+                cwd=self.repo_root,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if add.returncode != 0:
+                raise CommitError(f"git add failed: {add.stderr.strip()}")
 
         if self._nothing_staged(paths):
             return CommitReceipt(
@@ -125,6 +146,29 @@ class LocalGitCommitter:
             if push_result.returncode != 0:
                 raise CommitError(f"git push failed: {push_result.stderr.strip()}")
         return CommitReceipt(message=message, files=list(paths), sha=sha, pushed=pushed, status="committed")
+
+    def _is_tracked_file(self, path: str) -> bool:
+        """Allow explicit deletions without expanding a missing directory to its children."""
+        normalized = Path(path).as_posix()
+        commands = [["ls-files", "--stage", "-z", "--", path]]
+        if self._head_sha() is not None:
+            # Staged deletions have left the index but still name a file in HEAD.
+            commands.append(["ls-tree", "-z", "HEAD", "--", path])
+        for args in commands:
+            result = subprocess.run(
+                ["git", "--literal-pathspecs", *args],
+                cwd=self.repo_root,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode != 0:
+                raise CommitError(f"git path inspection failed: {result.stderr.strip()}")
+            for entry in result.stdout.split("\0"):
+                metadata, _, name = entry.partition("\t")
+                if name == normalized and metadata.split(" ", 1)[0] in {"100644", "100755", "120000"}:
+                    return True
+        return False
 
     def _nothing_staged(self, paths: list[str]) -> bool:
         """Ignore unrelated staged work when deciding whether a commit is needed."""

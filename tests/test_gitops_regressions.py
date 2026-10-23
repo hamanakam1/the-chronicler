@@ -132,3 +132,41 @@ def test_commit_validates_all_paths_before_staging(tmp_path: Path, path: str) ->
         committer.commit("unsafe path", ["generated.md", path])
 
     assert _git(repo, "diff", "--cached", "--name-only") == ""
+
+
+def test_missing_directory_cannot_select_multiple_deleted_files(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    committer = LocalGitCommitter(str(repo), push=False)
+    for path in ["docs/generated.md", "docs/unrelated.md"]:
+        committer.write_text(path, "original")
+    first = committer.commit("baseline", ["docs/generated.md", "docs/unrelated.md"])
+    (repo / "docs/generated.md").unlink()
+    (repo / "docs/unrelated.md").unlink()
+    (repo / "docs").rmdir()
+
+    with pytest.raises(UnsafePathError, match="explicit file"):
+        committer.commit("unsafe subtree selection", ["docs"])
+
+    assert _git(repo, "rev-parse", "HEAD") == first.sha
+    assert _git(repo, "diff", "--cached", "--name-only") == ""
+
+
+@pytest.mark.parametrize("staged", [False, True], ids=["unstaged-delete", "staged-delete"])
+def test_explicit_deleted_file_can_be_committed(tmp_path: Path, staged: bool) -> None:
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    committer = LocalGitCommitter(str(repo), push=False)
+    committer.write_text("generated[1].md", "original")
+    committer.commit("baseline", ["generated[1].md"])
+    (repo / "generated[1].md").unlink()
+    if staged:
+        _git(repo, "--literal-pathspecs", "add", "--", "generated[1].md")
+    committer.write_text("unrelated.md", "staged user work")
+    _git(repo, "add", "--", "unrelated.md")
+
+    receipt = committer.commit("delete generated file", ["generated[1].md"])
+
+    assert receipt.status == "committed"
+    assert _git(repo, "show", "--format=", "--name-only", "HEAD") == "generated[1].md"
+    assert _git(repo, "diff", "--cached", "--name-only") == "unrelated.md"

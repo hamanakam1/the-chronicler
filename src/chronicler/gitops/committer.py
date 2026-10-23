@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+import tempfile
 from pathlib import Path
 
 from pydantic import BaseModel, Field
@@ -56,9 +57,20 @@ class LocalGitCommitter:
         """Atomically write LLM-generated content into the target repo."""
         target = self._resolve(path)
         target.parent.mkdir(parents=True, exist_ok=True)
-        tmp_path = target.with_name(f".{target.name}.tmp")
-        tmp_path.write_text(content, encoding="utf-8")
-        tmp_path.replace(target)
+        temporary_path: Path | None = None
+        try:
+            # A fixed temporary name could overwrite another writer's file.
+            # Keeping this file beside the target still permits atomic replace.
+            with tempfile.NamedTemporaryFile(
+                mode="w", encoding="utf-8", dir=target.parent,
+                prefix=f".{target.name}.", suffix=".tmp", delete=False,
+            ) as temporary:
+                temporary_path = Path(temporary.name)
+                temporary.write(content)
+            temporary_path.replace(target)
+        finally:
+            if temporary_path is not None:
+                temporary_path.unlink(missing_ok=True)
         return target
 
     def commit(self, message: str, paths: list[str]) -> CommitReceipt:

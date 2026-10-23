@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import subprocess
+import tempfile
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -170,3 +172,43 @@ def test_explicit_deleted_file_can_be_committed(tmp_path: Path, staged: bool) ->
     assert receipt.status == "committed"
     assert _git(repo, "show", "--format=", "--name-only", "HEAD") == "generated[1].md"
     assert _git(repo, "diff", "--cached", "--name-only") == "unrelated.md"
+
+
+def test_write_text_preserves_an_existing_temporary_filename(tmp_path: Path) -> None:
+    committer = LocalGitCommitter(str(tmp_path), push=False)
+    earlier = tmp_path / ".generated.md.tmp"
+    earlier.write_text("earlier writer's content", encoding="utf-8")
+
+    committer.write_text("generated.md", "new generated content")
+
+    assert earlier.read_text(encoding="utf-8") == "earlier writer's content"
+    assert (tmp_path / "generated.md").read_text(encoding="utf-8") == "new generated content"
+    assert set(tmp_path.iterdir()) == {earlier, tmp_path / "generated.md"}
+
+
+def test_interrupted_generated_write_preserves_previous_content(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    committer = LocalGitCommitter(str(tmp_path), push=False)
+    target = committer.write_text("generated.md", "previous generated content")
+    original_temporary_file = tempfile.NamedTemporaryFile
+
+    def interrupted_temporary_file(*args: Any, **kwargs: Any) -> Any:
+        temporary = original_temporary_file(*args, **kwargs)
+        write = temporary.write
+
+        def interrupted_write(content: str) -> None:
+            write(content[: len(content) // 2])
+            temporary.flush()
+            raise OSError("synthetic disk full")
+
+        temporary.write = interrupted_write
+        return temporary
+
+    monkeypatch.setattr(tempfile, "NamedTemporaryFile", interrupted_temporary_file)
+
+    with pytest.raises(OSError, match="synthetic disk full"):
+        committer.write_text("generated.md", "replacement generated content")
+
+    assert target.read_text(encoding="utf-8") == "previous generated content"
+    assert list(tmp_path.iterdir()) == [target]

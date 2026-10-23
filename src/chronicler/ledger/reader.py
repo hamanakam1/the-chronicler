@@ -1,8 +1,11 @@
 """EdgeRecord append-only ledger reader protocol + SQLite implementation."""
 
+from __future__ import annotations
+
 import json
 import sqlite3
-from datetime import datetime
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 from chronicler.errors import LedgerError
@@ -26,9 +29,22 @@ RESOLUTION_EVENT_TYPES = frozenset(
 class EdgeRecordReader(Protocol):
     """Reads new friction entries out of the append-only ledger."""
 
-    def fetch_new_failures(self, since: datetime | None, limit: int) -> list[ExecutionAuditLog]:
-        """Return failure audits newer than `since` (oldest-first ordering preserved upstream)."""
+    def fetch_new_failures(
+        self, since: datetime | None, limit: int, *, after_failure_id: int | None = None
+    ) -> list[ExecutionAuditLog]:
+        """Return audits after the timestamp/ID cursor, ordered by timestamp then numeric ID."""
         ...
+
+
+def failure_id_for(audit: ExecutionAuditLog) -> int | None:
+    """Decode SQLite's audit identifier without assuming other readers use numeric IDs."""
+    if audit.source != "failures" or not audit.audit_id.startswith("audit-"):
+        return None
+    try:
+        failure_id = int(audit.audit_id.removeprefix("audit-"))
+    except ValueError:
+        return None
+    return failure_id if audit.audit_id == f"audit-{failure_id}" else None
 
 
 class SqliteEdgeRecordReader:
@@ -38,22 +54,41 @@ class SqliteEdgeRecordReader:
         self.path = path
 
     def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(f"file:{self.path}?mode=ro", uri=True, timeout=10.0)
+        # SQLite truncates a filename at a percent-decoded NUL instead of
+        # rejecting it, so encoding alone cannot make this invalid path safe.
+        if "\0" in self.path:
+            raise LedgerError("ledger path must not contain NUL characters")
+        # Encode the filename before adding URI options: a literal #, ? or %
+        # must not select a different ledger or change the read-only mode.
+        uri = Path(self.path).absolute().as_uri()
+        connection = sqlite3.connect(f"{uri}?mode=ro", uri=True, timeout=10.0)
         connection.row_factory = sqlite3.Row
         return connection
 
-    def fetch_new_failures(self, since: datetime | None, limit: int) -> list[ExecutionAuditLog]:
+    def fetch_new_failures(
+        self, since: datetime | None, limit: int, *, after_failure_id: int | None = None
+    ) -> list[ExecutionAuditLog]:
         """Scoop failure audits newer than `since`, joining task context for the LLM brain.
 
         Rows are returned **oldest first**. The daemon advances a watermark to
         the newest row it processed, so handing back the newest N rows would
         hide every older row behind the watermark and skip it forever.
+        An ID resumes within the boundary timestamp; timestamp-only callers
+        keep the original strictly-newer semantics.
         """
         effective_limit = max(1, limit)
         connection = None
         try:
             connection = self._connect()
             since_ts = since.timestamp() if since is not None else None
+            if since is not None and after_failure_id is not None:
+                boundary = connection.execute(
+                    "SELECT created FROM failures WHERE id = ?", (after_failure_id,)
+                ).fetchone()
+                # Datetime JSON rounds to microseconds; the append-only row retains
+                # the original REAL timestamp needed for exact SQL comparisons.
+                if boundary is not None and self._as_datetime(boundary["created"]).timestamp() == since_ts:
+                    since_ts = boundary["created"]
             rows = connection.execute(
                 """
                 SELECT f.id AS failure_id, f.task_id AS task_id, f.session_id AS session_id,
@@ -61,11 +96,12 @@ class SqliteEdgeRecordReader:
                        f.created AS created
                 FROM failures f
                 LEFT JOIN tasks t ON t.id = f.task_id
-                WHERE (? IS NULL OR f.created > ?)
+                WHERE (? IS NULL OR f.created > ?
+                       OR (? IS NOT NULL AND f.created = ? AND f.id > ?))
                 ORDER BY f.created ASC, f.id ASC
                 LIMIT ?
                 """,
-                (since_ts, since_ts, effective_limit),
+                (since_ts, since_ts, after_failure_id, since_ts, after_failure_id, effective_limit),
             ).fetchall()
 
             audits: list[ExecutionAuditLog] = []
@@ -133,5 +169,5 @@ class SqliteEdgeRecordReader:
         if isinstance(value, datetime):
             return value
         if isinstance(value, (int, float)):
-            return datetime.fromtimestamp(float(value))
+            return datetime.fromtimestamp(float(value), tz=UTC)
         return datetime.fromisoformat(str(value))

@@ -238,11 +238,54 @@ Module map:
 
 - Path-traversal guard in the committer (`UnsafePathError`) before any write.
 - Heuristic IDs are deterministically derived from `(failure_category, fingerprint)` so dedupe across cycles is stable.
-- Watermarking via `ChroniclerState` prevents re-processing the same ledger entries.
+- Watermarking via `ChroniclerState` persists the UTC timestamp and numeric failure ID, so bounded batches resume within a shared timestamp without skipping rows, including after restart. Existing timestamp-only state keeps its strictly-newer behavior until the next batch establishes an ID cursor; previously skipped rows are not recovered automatically.
+  Cursor precision relies on the append-only ledger retaining the boundary failure
+  row. Custom readers without canonical numeric failure IDs retain timestamp-only
+  behavior.
 - Push is configurable (`CHRONICLER_GIT_PUSH`) and commit receipts are captured per cycle.
+  A successful local commit remains reported and checkpointed if its push fails:
+  the receipt keeps `status: "committed"` and the local SHA, sets `pushed: false`,
+  and records the delivery failure in `push_error` (also logged as a warning).
+  Failed pushes are not retried automatically; actual local commit failures still
+  fail the audit.
 - The ledger reader returns the **oldest** unprocessed failures first, so a backlog drains in order and the watermark never hides an older row behind a newer one.
 - A single unusable failure is isolated: the rest of the batch still lands, and the failure is reported in `failed_audits` rather than aborting the cycle.
+- Ollama responses must be completed objects with `done: true`, an object-valued
+  `message`, and string-valued `content`. Missing or non-boolean completion markers
+  and any envelope containing an `error` field are rejected as `OllamaError`, even
+  when HTTP returns 200 and the content looks like valid rule JSON. Plain text and
+  fenced JSON remain supported; `ask` also accepts empty text, while `ask_for_json`
+  still requires a JSON object.
 - Writing identical bytes twice is a no-op (`status: "unchanged"`), not a commit error.
+- Commits include only the explicitly requested files, with filenames treated literally.
+  Unrelated staged and unstaged changes are preserved; unchanged generated files do
+  not trigger a commit of someone else's staged work. Commit paths must name files,
+  not directories.
+- State checkpoints use a unique temporary file and atomic replacement. An interrupted
+  write or failed replacement preserves the previous readable checkpoint.
+
+Generated output paths are checked as a complete plan before any file is written.
+They must name distinct regular files in a usable Git worktree, with no symlink
+components, Git metadata targets, nested repository/submodule traversal, tracked
+directory replacements, or file/parent overlaps. Names that differ only by case or
+Unicode normalization are treated as the same output for Mac filesystem compatibility,
+including aliases of existing files or directories. Untracked outputs ignored by Git
+are rejected before writing; tracked files remain writable even when an ignore rule
+matches them. Explicit Git commits may still record a symlink itself or its deletion;
+generated content never follows the link.
+This preflight preserves existing files when a plan is invalid. It is not a
+transaction across files: a later I/O or Git failure can leave earlier valid writes.
+The standalone `write_text` helper also supports ordinary directories without Git;
+the brain's full output plan requires a usable Git worktree before it writes.
+
+### Current rule-output limitation
+
+Each successfully processed heuristic **replaces** the configured `RULES.json` and
+`SKILLS.md` outputs. These files contain the latest heuristic; previous rules and
+handwritten content at those paths are not merged or retained. Set
+`CHRONICLER_RULES_FILE` and `CHRONICLER_SKILLS_FILE` to dedicated generated files.
+Lore documents use a separate path per heuristic. Cumulative rule merging remains
+unimplemented.
 
 ## Changelog
 

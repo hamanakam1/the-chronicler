@@ -101,8 +101,8 @@ def test_watermark_never_skips_older_rows(tmp_path) -> None:
     assert {audit.fingerprint for audit in remaining} == {f"sha256:fp-{i}" for i in range(30)}
 
 
-def test_reader_handles_identical_timestamps(tmp_path) -> None:
-    """Rows sharing a timestamp must not be lost behind the watermark."""
+def test_timestamp_only_watermark_keeps_strict_legacy_semantics(tmp_path) -> None:
+    """An old cursor cannot distinguish already-seen rows at its timestamp."""
     ledger = tmp_path / "ledger.sqlite"
     _make_ledger(ledger, failure_count=5)
     connection = sqlite3.connect(ledger)
@@ -113,6 +113,4 @@ def test_reader_handles_identical_timestamps(tmp_path) -> None:
     reader = SqliteEdgeRecordReader(str(ledger))
     watermark = datetime.fromtimestamp(1760000100.0, tz=UTC)
     batch = reader.fetch_new_failures(since=watermark, limit=10)
-    # Same-second rows are invisible to a strict ">" watermark, but the
-    # reader must never hand back fewer rows than exist.
-    assert len(batch) <= 5
+    assert batch == []

@@ -28,7 +28,9 @@ class FakeLedgerReader:
         self.batches: list[list[ExecutionAuditLog]] = [list(batch) for batch in (batches or [])]
         self.calls: list[tuple[Any, int | None]] = []
 
-    def fetch_new_failures(self, since: Any, limit: int | None = None) -> list[ExecutionAuditLog]:
+    def fetch_new_failures(
+        self, since: Any, limit: int | None = None, *, after_failure_id: int | None = None
+    ) -> list[ExecutionAuditLog]:
         self.calls.append((since, limit))
         if self.batches:
             return list(self.batches.pop(0))
@@ -41,8 +43,8 @@ class FakeWatcher:
     def __init__(self, reader: Any) -> None:
         self.reader = reader
 
-    async def poll_once(self, since: Any = None, limit: int | None = None):
-        return self.reader.fetch_new_failures(since, limit if limit is not None else 25)
+    async def poll_once(self, since: Any = None, limit: int | None = None, *, after_failure_id: int | None = None):
+        return self.reader.fetch_new_failures(since, limit if limit is not None else 25, after_failure_id=after_failure_id)
 
 
 class FakeLLM:
@@ -82,6 +84,9 @@ class FakeCommitter:
     def __init__(self) -> None:
         self.writes: list[tuple[str, str]] = []
         self.commit_calls: list[tuple[str, list[str]]] = []
+
+    def validate_write_paths(self, paths: list[str]) -> None:
+        pass
 
     def write_text(self, path: str, content: str):
         self.writes.append((path, content))

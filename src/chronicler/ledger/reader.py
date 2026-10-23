@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 from chronicler.errors import LedgerError
@@ -53,7 +54,10 @@ class SqliteEdgeRecordReader:
         self.path = path
 
     def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(f"file:{self.path}?mode=ro", uri=True, timeout=10.0)
+        # Encode the filename before adding URI options: a literal #, ? or %
+        # must not select a different ledger or change the read-only mode.
+        uri = Path(self.path).absolute().as_uri()
+        connection = sqlite3.connect(f"{uri}?mode=ro", uri=True, timeout=10.0)
         connection.row_factory = sqlite3.Row
         return connection
 

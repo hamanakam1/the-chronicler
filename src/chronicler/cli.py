@@ -4,8 +4,10 @@ import argparse
 import asyncio
 import json
 import logging
+import subprocess
 import sys
 from collections.abc import Sequence
+from pathlib import Path
 
 from chronicler.ascii_art import print_banner
 from chronicler.brain.extraction import HeuristicExtractor
@@ -20,7 +22,27 @@ from chronicler.llm.client import OllamaClient
 from chronicler.rules.hardener import RuleHardener
 
 
+def _execution_repo_root(config: ChroniclerConfig) -> str:
+    """Validate the explicit write target before constructing runtime dependencies."""
+    root = config.repo_root
+    if root is None or not root.strip():
+        raise ValueError("Set CHRONICLER_REPO_ROOT to the Git work tree that should receive generated files.")
+    if not Path(root).is_dir():
+        raise ValueError("CHRONICLER_REPO_ROOT must name an existing Git work tree.")
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--is-inside-work-tree"],
+            cwd=root, capture_output=True, text=True, check=False,
+        )
+    except OSError as exc:
+        raise ValueError("Unable to validate CHRONICLER_REPO_ROOT as a Git work tree.") from exc
+    if result.returncode != 0 or result.stdout.strip() != "true":
+        raise ValueError("CHRONICLER_REPO_ROOT must name an existing Git work tree.")
+    return root
+
+
 def build_brain(config: ChroniclerConfig) -> ChroniclerBrain:
+    repo_root = _execution_repo_root(config)
     reader = SqliteEdgeRecordReader(config.ledger_path)
     watcher = EdgeRecordWatcher(reader, poll_interval=config.poll_interval_seconds)
     llm = OllamaClient(config)
@@ -31,7 +53,7 @@ def build_brain(config: ChroniclerConfig) -> ChroniclerBrain:
         extractor=HeuristicExtractor(),
         hardener=RuleHardener(),
         synthesizer=DocSynthesizer(llm, lore_dir=config.lore_dir),
-        committer=LocalGitCommitter(repo_root=config.repo_root, remote=config.git_remote, push=config.git_push),
+        committer=LocalGitCommitter(repo_root=repo_root, remote=config.git_remote, push=config.git_push),
         state_store=JsonStateStore(config.state_path),
         config=config,
     )
@@ -102,8 +124,11 @@ def _cmd_doctor(config: ChroniclerConfig) -> int:
             checks["ledger"] = {"readable": True, "sample_audits": len(audits)}
         except Exception as exc:  # noqa: BLE001
             checks["ledger"] = {"readable": False, "error": str(exc)}
-        committer = LocalGitCommitter(repo_root=config.repo_root, push=False)
-        checks["git"] = {"repo": committer.is_repo()}
+        if config.repo_root is None:
+            checks["git"] = {"configured": False, "repo": False, "error": "Set CHRONICLER_REPO_ROOT."}
+        else:
+            committer = LocalGitCommitter(repo_root=config.repo_root, push=False)
+            checks["git"] = {"configured": True, "repo": committer.is_repo()}
         return checks
 
     checks = asyncio.run(_run_checks())
@@ -133,14 +158,21 @@ def configure_logging(level: str) -> None:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    config = ChroniclerConfig()
+    try:
+        config = ChroniclerConfig()
+    except ValueError as exc:
+        parser.error(str(exc))
     configure_logging(getattr(args, "log_level", "info"))
     if not getattr(args, "quiet", False):
         print_banner()
-    if args.command == "run":
-        return _cmd_run(build_brain(config), once=args.once)
-    if args.command == "watch":
-        asyncio.run(build_brain(config).run_forever(poll_interval=args.interval))
+    if args.command in {"run", "watch"}:
+        try:
+            brain = build_brain(config)
+        except ValueError as exc:
+            parser.error(str(exc))
+        if args.command == "run":
+            return _cmd_run(brain, once=args.once)
+        asyncio.run(brain.run_forever(poll_interval=args.interval))
         return 0
     if args.command == "doctor":
         return _cmd_doctor(config)

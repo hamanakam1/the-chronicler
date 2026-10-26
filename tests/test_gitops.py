@@ -18,7 +18,7 @@ def _init_repo(path) -> None:
 def test_write_text_and_commit(tmp_path) -> None:
     repo = tmp_path / "repo"
     _init_repo(repo)
-    committer = LocalGitCommitter(str(repo), push=False)
+    committer = LocalGitCommitter(str(repo))
 
     target = committer.write_text("docs/lore/heur-abc123.md", "# Chronicler Lore")
     assert str(target).endswith("docs/lore/heur-abc123.md")
@@ -46,3 +46,28 @@ def test_write_text_rejects_absolute_paths(tmp_path) -> None:
 def test_is_repo_false_outside_git(tmp_path) -> None:
     committer = LocalGitCommitter(str(tmp_path / "not-a-repo"), push=False)
     assert committer.is_repo() is False
+
+
+def test_push_still_works_when_explicitly_enabled(tmp_path, monkeypatch) -> None:
+    calls = []
+
+    def run(argv, **kwargs):
+        calls.append(argv)
+        return subprocess.CompletedProcess(argv, 1 if "diff" in argv else 0, stdout="example-sha", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", run)
+    receipt = LocalGitCommitter(str(tmp_path), push=True).commit("example commit", ["RULES.json"])
+    assert receipt.pushed is True
+    assert ["git", "push", "origin", "HEAD"] in calls
+
+
+def test_direct_committer_expands_home_path(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    committer = LocalGitCommitter("~/example-repo")
+    assert committer.repo_root == (tmp_path / "example-repo").resolve()
+
+
+@pytest.mark.parametrize("root", ["", " \t"])
+def test_direct_committer_does_not_guess_current_directory(root) -> None:
+    with pytest.raises(ValueError, match="must not be blank"):
+        LocalGitCommitter(root)

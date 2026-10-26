@@ -91,22 +91,33 @@ The Chronicler is the background daemon that cures *comprehension debt* — the 
 ## Quick Start
 
 ```bash
-# 1. Clone the memory core
-git clone <target-repo> the-chronicler && cd the-chronicler
+# 1. Install from source with Python 3.12+
+git clone https://github.com/hamanakam1/the-chronicler && cd the-chronicler
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e .
 
-# 2. Point it at your local ledger + target repo (env overrides below)
-export CHRONICLER_LEDGER_PATH=~/.taskrivet/ledger.sqlite
-export CHRONICLER_REPO_ROOT=~/Projects/taskrivet
+# 2. Select your existing ledger and Git work tree; replace these example paths
+export CHRONICLER_LEDGER_PATH="$HOME/.taskrivet/ledger.sqlite"
+export CHRONICLER_REPO_ROOT="$HOME/Projects/example-repo"
+export CHRONICLER_GIT_PUSH=false
 
 # 3. Sanity-check the black ops setup
 chronicler doctor
 
-# 4. Ingest one batch and commit what it learns
+# 4. Ingest one batch, write generated files, and create local commits
 chronicler run --once
 
 # 5. Watch the shadows
 chronicler watch
 ```
+
+There is no default target repository. `run` and `watch` require an explicitly
+configured, existing Git work tree before opening the ledger, constructing the
+model client, or creating state/output dependencies. `doctor` reports a missing
+target as unconfigured. The ledger is read-only; running a cycle writes generated
+files and local commits in the selected repository, plus Chronicler's state file.
+Push is disabled unless explicitly enabled.
 
 ### Container image
 
@@ -156,8 +167,8 @@ read, what it learned and what it committed:
 | `CHRONICLER_OLLAMA_BASE_URL` | `http://localhost:11434` | Local Ollama endpoint |
 | `CHRONICLER_OLLAMA_MODEL` | `qwen3.8:latest` | Local reasoning model |
 | `CHRONICLER_OLLAMA_TIMEOUT_SECONDS` | `120` | Per-request timeout against the local LLM |
-| `CHRONICLER_LEDGER_PATH` | `~/.taskrivet/ledger.sqlite` | Append-only EdgeRecord ledger |
-| `CHRONICLER_REPO_ROOT` | target checkout | Repo receiving hardened rules + docs |
+| `CHRONICLER_LEDGER_PATH` | `~/.taskrivet/ledger.sqlite` | Existing ledger to read; `~` is the current user's home |
+| `CHRONICLER_REPO_ROOT` | unset | Explicit existing Git work tree receiving hardened rules + docs |
 | `CHRONICLER_RULES_FILE` | `RULES.json` | Hardened ruleset output target |
 | `CHRONICLER_SKILLS_FILE` | `SKILLS.md` | Prompt-context injection output target |
 | `CHRONICLER_LORE_DIR` | `docs/lore` | Generated lore docs location |
@@ -165,10 +176,23 @@ read, what it learned and what it committed:
 | `CHRONICLER_STATE_PATH` | `~/.chronicler/state.json` | Daemon watermark / dedupe state |
 | `CHRONICLER_POLL_INTERVAL_SECONDS` | `30` | Watcher cadence |
 | `CHRONICLER_AUDIT_BATCH_LIMIT` | `25` | Max audits per cycle |
-| `CHRONICLER_GIT_REMOTE` | `origin` | Git remote for zero-intervention push |
-| `CHRONICLER_GIT_PUSH` | `true` | Enable automatic push |
+| `CHRONICLER_GIT_REMOTE` | `origin` | Git remote used when push is enabled |
+| `CHRONICLER_GIT_PUSH` | `false` | Opt in to automatic push with `true` |
 
-Every variable can also live in a `.env` file next to the checkout.
+Every variable can also live in a `.env` file in the current working directory;
+environment variables take precedence. Ledger and state defaults are computed
+for the current user each time settings are loaded. Explicit ledger, state, and
+repository paths expand `~`; relative paths remain relative to the working
+directory. Empty or whitespace-only paths are rejected. Output names such as
+`RULES.json` and `docs/lore` remain relative to the selected repository.
+
+**Migration:** earlier versions selected a fixed deployment and enabled push by
+default. Set `CHRONICLER_REPO_ROOT` explicitly before running this version. Set
+`CHRONICLER_GIT_PUSH=true` only when automatic publication to the selected remote
+is intended. Existing environment or `.env` settings that explicitly enable push
+continue to do so. Keeping push disabled still allows generated file writes and
+local commits; it is not a preview mode. Ollama remains the only model client,
+with the existing local endpoint and no automatic cloud fallback.
 
 ## CLI
 
@@ -220,7 +244,7 @@ Module map:
 | `chronicler.brain` | `ChroniclerBrain` orchestration loop + `HeuristicExtractor` + `ChroniclerState` |
 | `chronicler.rules` | `RuleHardener` — drafts hardened rules / prompt injections |
 | `chronicler.docs` | `DocSynthesizer` — turns heuristics into `DocUpdatePayload` |
-| `chronicler.gitops` | `LocalGitCommitter` — safe writes + zero-intervention commit/push |
+| `chronicler.gitops` | `LocalGitCommitter` — path-checked writes, local commits, and opt-in push |
 | `chronicler.ascii_art` | The lowrider wordmark rendered by the CLI banner |
 | `chronicler.cli` | Headless CLI: `run`, `watch`, `doctor` |
 
@@ -232,14 +256,14 @@ Module map:
    - `DocUpdatePayload` — structured map of generated markdown → target file paths.
 2. **Architecture & Directory Tree** — modular layout above with strict separation between watcher / brain / rules / docs / git layers.
 3. **Meta-Learning Brain (Core Orchestration)** — `ChroniclerBrain.run_cycle` scoops the latest failure batch, asks local Ollama, formats the fix into the target ruleset, commits rules + docs.
-4. **Local Git & File-System Ninja Module** — `LocalGitCommitter` safely writes LLM payloads to disk and executes local `git commit` + push with zero human intervention.
+4. **Local Git & File-System Ninja Module** — `LocalGitCommitter` writes path-checked LLM payloads and creates local Git commits; push requires explicit opt-in.
 
 ## Safety & Hardening Notes
 
 - Path-traversal guard in the committer (`UnsafePathError`) before any write.
 - Heuristic IDs are deterministically derived from `(failure_category, fingerprint)` so dedupe across cycles is stable.
 - Watermarking via `ChroniclerState` prevents re-processing the same ledger entries.
-- Push is configurable (`CHRONICLER_GIT_PUSH`) and commit receipts are captured per cycle.
+- Push defaults to disabled (`CHRONICLER_GIT_PUSH=false`); commit receipts are captured per cycle.
 - The ledger reader returns the **oldest** unprocessed failures first, so a backlog drains in order and the watermark never hides an older row behind a newer one.
 - A single unusable failure is isolated: the rest of the batch still lands, and the failure is reported in `failed_audits` rather than aborting the cycle.
 - Writing identical bytes twice is a no-op (`status: "unchanged"`), not a commit error.

@@ -196,18 +196,25 @@ chronicler watch --log-level debug      # verbose daemon log
 
 ## Architecture
 
-```
-┌─────────────────┐     ┌──────────────────┐     ┌──────────────────┐
-│ EdgeRecord      │────▶│ Meta-Learning    │────▶│ Local Git / FS   │
-│ Watcher         │     │ Brain            │     │ Ninja            │
-│ (polling)       │     │ (Ollama + Qwen)  │     │ (commit+push)    │
-└─────────────────┘     └──────────────────┘     └──────────────────┘
-        ▲                        │                          │
-        └──────── Lore Docs ◀────┘                          │
-                          ┌──────────────┘
-                          ▼
-                   Target Repo
-                   (RULES.json, SKILLS.md, docs/lore/)
+```mermaid
+flowchart TD
+    subgraph Ingestion["1. Ingestion"]
+        EW["<b>EdgeRecord Watcher</b><br/><i>(polling & telemetry)</i>"]
+    end
+
+    subgraph Intelligence["2. Extraction"]
+        MB["<b>Meta-Learning Brain</b><br/><i>(Local Ollama + Qwen)</i>"]
+    end
+
+    subgraph Persistence["3. GitOps & Hardening"]
+        GN["<b>Local Git / FS Ninja</b><br/><i>(safe commit + push)</i>"]
+        TR["<b>Target Repository</b><br/><code>RULES.json</code>, <code>SKILLS.md</code>, <code>docs/lore/</code>"]
+    end
+
+    EW -->|Battle scars & failures| MB
+    MB -->|Draft heuristics & lore| GN
+    GN -->|Zero-intervention commit| TR
+    MB -.->|Lore updates| EW
 ```
 
 Module map:

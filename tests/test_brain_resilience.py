@@ -9,7 +9,7 @@ behind it.
 from __future__ import annotations
 
 import pytest
-from tests.conftest import FakeCommitter, FakeLedgerReader, FakeLLM
+from conftest import FakeCommitter, FakeLedgerReader, FakeLLM
 
 from chronicler.brain.orchestrator import ChroniclerBrain
 from chronicler.brain.state_store import InMemoryStateStore

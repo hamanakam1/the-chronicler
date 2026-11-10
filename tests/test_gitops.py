@@ -50,10 +50,15 @@ def test_is_repo_false_outside_git(tmp_path) -> None:
 
 def test_push_still_works_when_explicitly_enabled(tmp_path, monkeypatch) -> None:
     calls = []
+    # The committer only accepts explicit, existing file paths.
+    (tmp_path / "RULES.json").write_text("{}", encoding="utf-8")
 
     def run(argv, **kwargs):
         calls.append(argv)
-        return subprocess.CompletedProcess(argv, 1 if "diff" in argv else 0, stdout="example-sha", stderr="")
+        # `git diff --cached --quiet` exits 1 when there are staged changes;
+        # every other git call in this path succeeds.
+        has_changes = "--quiet" in argv
+        return subprocess.CompletedProcess(argv, 1 if has_changes else 0, stdout="example-sha", stderr="")
 
     monkeypatch.setattr(subprocess, "run", run)
     receipt = LocalGitCommitter(str(tmp_path), push=True).commit("example commit", ["RULES.json"])

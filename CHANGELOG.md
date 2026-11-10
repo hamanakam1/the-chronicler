@@ -14,8 +14,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `/Users/michaelhamanaka/...`, so the tool was broken for every other user
   and inside the container image, where that path does not exist and is not
   writable. The defaults are now resolved against the *current* user's home
-  directory and the current checkout, and a leading `~` in any supplied path
-  is expanded.
+  directory, and a leading `~` in any supplied path is expanded.
+- **Ledger filenames are encoded and NUL-checked** before they reach the
+  SQLite URI, so a hostile or malformed ledger path cannot corrupt the
+  read-only connection string.
+- **Incomplete or malformed Ollama envelopes are rejected** instead of being
+  parsed as if they carried a message.
+- **A local commit survives a failed push.** The receipt keeps
+  `status: "committed"` and the local SHA, sets `pushed: false` and records
+  the delivery failure in `push_error`.
+- **Generated file writes are validated before they replace anything:** a
+  path that resolves to a tracked subtree, a directory, or a deleted file is
+  rejected rather than written.
+- **Generated commits no longer sweep up unrelated staged work:** only the
+  explicitly requested files participate.
+- **The daemon checkpoint is saved atomically**, so a crash mid-write cannot
+  corrupt the watermark.
+- **A stable cursor is persisted for timestamp-tied ledger rows**, so bounded
+  batches resume within a shared timestamp without skipping rows.
+- **Generated filenames no longer collide** when two writes target the same
+  path.
 - **Failures are no longer silently skipped.** The ledger reader returned the
   *newest* N failures while the daemon advances a watermark to the newest row
   it has seen. Every failure older than the batch was therefore hidden behind
@@ -79,8 +97,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `OllamaClient.synthesize_document`, duplicated `DocSynthesizer.synthesize`
   and never called.
-- `EdgeRecordWatcher.watch()`, an unused async iterator superseded by the
-  daemon's own polling loop.
 - `CHRONICLER_HEURISTIC_STORE_DIR`, a setting that did nothing.
 - Dead imports and a `make_audit` fixture that was shadowed by the
   identically named fixture in `conftest.py`.
@@ -90,8 +106,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The ASCII art is now a hand-composed chop-top LA lowrider with round wire
   wheels, chrome trim and a staggered cruise line.
 - The README no longer repeats the "Core Autonomous Superpowers" section.
-- Removed dead imports and a `make_audit` fixture that was shadowed by the
-  identically named fixture in `conftest.py`.
+- **The write target is now explicit.** `CHRONICLER_REPO_ROOT` has no
+  default: `run` and `watch` refuse to start until it names an existing Git
+  work tree, and `doctor` reports a missing target as unconfigured.
+- **Push is now opt-in.** `CHRONICLER_GIT_PUSH` defaults to `false`.
+- Every GitHub Action is pinned to an immutable commit SHA, and a test keeps
+  it that way.
+- The README header is a hand-authored memory-core brand mark; the CLI
+  banner is the lowrider.
 
 ## [0.1.0]
 

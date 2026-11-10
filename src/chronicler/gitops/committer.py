@@ -189,7 +189,7 @@ class LocalGitCommitter:
         return target
 
     def commit(self, message: str, paths: list[str]) -> CommitReceipt:
-        """Stage, commit, and (optionally) push the given files. Zero human intervention.
+        """Stage, commit, and (optionally) push the given files.
 
         Writing the same bytes twice is not an error: the receipt comes back
         with status ``unchanged`` and the daemon carries on. Git itself exits
@@ -197,6 +197,7 @@ class LocalGitCommitter:
         against the index before the commit is attempted.
         Only the requested literal files participate: another caller's staged
         changes must remain staged, including when these files are unchanged.
+        A local commit that succeeds is reported even when its push fails.
         """
         if not paths:
             return CommitReceipt(message=message, files=[], status="empty")

@@ -14,7 +14,7 @@
 <section class="hero"><p class="eyebrow">The memory core of the autonomous AI software factory</p><h1>The ledger keeps the scars.<br><span>The rules keep the lesson.</span></h1><p class="lead">The Chronicler watches the EdgeRecord ledger, extracts failure heuristics through local Ollama, and commits hardened rules and lore docs back to Git — headless, local-first, with a path-traversal guard before every write.</p><div class="actions"><a class="button primary" href="https://github.com/hamanakam1/the-chronicler">Read the README ↗</a><a class="button" href="https://github.com/hamanakam1/the-chronicler/releases">Releases ↗</a><a class="button" href="https://github.com/hamanakam1/the-chronicler/pkgs/container/the-chronicler">Container image ↗</a></div></section>
 <section id="health"><figure><img src="screenshots/doctor.png" alt="chronicler doctor reporting the Ollama, ledger and git checks"><figcaption><code>chronicler doctor</code>: is the local Ollama reachable, is the ledger readable, and is the target repository a Git repository?</figcaption></figure></section>
 <section id="quick-start"><div class="section-head"><div><p class="eyebrow">01 / Quick start</p><h2>Point it at a ledger and a repository.</h2></div><p>No cloud inference. No paid fallback. The model is the one you run.</p></div><pre><span class="c"># install</span>
-pip install the-chronicler
+pip install <span class="c">"the-chronicler @ git+https://github.com/hamanakam1/the-chronicler.git"</span>
 
 <span class="c"># point it at your local ledger and target repo</span>
 export CHRONICLER_LEDGER_PATH=~/.taskrivet/ledger.sqlite

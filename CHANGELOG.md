@@ -67,6 +67,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A `restart: unless-stopped` policy in the Compose file, and a `.gitignore`
   that covers build artefacts, coverage output, editor directories and OS
   cruft.
+- **A PyPI publish workflow** (`.github/workflows/pypi.yml`) that builds,
+  checks with `twine --strict` and publishes on a GitHub release. The
+  project name is not yet registered on PyPI, so the documented install is
+  still `pip install "the-chronicler @ git+https://github.com/hamanakam1/the-chronicler.git"`.
+- **A README consistency checker** (`scripts/check_readme_consistency.py`)
+  wired into the test suite: a config variable or module that the README
+  documents but the code no longer has now fails CI.
+
+### Removed
+
+- `OllamaClient.synthesize_document`, duplicated `DocSynthesizer.synthesize`
+  and never called.
+- `EdgeRecordWatcher.watch()`, an unused async iterator superseded by the
+  daemon's own polling loop.
+- `CHRONICLER_HEURISTIC_STORE_DIR`, a setting that did nothing.
+- Dead imports and a `make_audit` fixture that was shadowed by the
+  identically named fixture in `conftest.py`.
 
 ### Changed
 

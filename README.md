@@ -48,8 +48,11 @@ The Chronicler is the background daemon that cures *comprehension debt* — the 
 ## Quick Start
 
 ```bash
-# 1. Clone the memory core
-git clone <target-repo> the-chronicler && cd the-chronicler
+# 1. Get the memory core
+pip install "the-chronicler @ git+https://github.com/hamanakam1/the-chronicler.git"
+# ...or work from a checkout:
+# git clone https://github.com/hamanakam1/the-chronicler.git && cd the-chronicler
+# pip install -e ".[dev]"
 
 # 2. Point it at your local ledger + target repo (env overrides below)
 export CHRONICLER_LEDGER_PATH=~/.taskrivet/ledger.sqlite
@@ -64,6 +67,9 @@ chronicler run --once
 # 5. Watch the shadows
 chronicler watch
 ```
+
+`CHRONICLER_REPO_ROOT` defaults to the directory you start the daemon in, so
+step 2 is only needed when the target repository lives somewhere else.
 
 ### Container image
 
@@ -121,7 +127,6 @@ read, what it learned and what it committed:
 | `CHRONICLER_RULES_FILE` | `RULES.json` | Hardened ruleset output target |
 | `CHRONICLER_SKILLS_FILE` | `SKILLS.md` | Prompt-context injection output target |
 | `CHRONICLER_LORE_DIR` | `docs/lore` | Generated lore docs location |
-| `CHRONICLER_HEURISTIC_STORE_DIR` | `.chronicler/heuristics` | Local heuristic cache directory |
 | `CHRONICLER_STATE_PATH` | `~/.chronicler/state.json` | Daemon watermark / dedupe state |
 | `CHRONICLER_POLL_INTERVAL_SECONDS` | `30` | Watcher cadence |
 | `CHRONICLER_AUDIT_BATCH_LIMIT` | `25` | Max audits per cycle |

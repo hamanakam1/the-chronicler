@@ -42,7 +42,6 @@ class ChroniclerConfig(BaseSettings):
     rules_file: str = "RULES.json"
     skills_file: str = "SKILLS.md"
     lore_dir: str = "docs/lore"
-    heuristic_store_dir: str = ".chronicler/heuristics"
 
     # Daemon state
     state_path: str = Field(default_factory=_default_state_path)

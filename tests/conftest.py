@@ -12,7 +12,7 @@ from chronicler.config import ChroniclerConfig
 from chronicler.docs.synthesizer import DocSynthesizer
 from chronicler.gitops.committer import CommitReceipt
 from chronicler.rules.hardener import RuleHardener
-from chronicler.schemas import DocUpdatePayload, ExecutionAuditLog, ExtractedHeuristic
+from chronicler.schemas import DocUpdatePayload, ExecutionAuditLog
 
 DEFAULT_HEURISTIC_PAYLOAD: dict = {
     "insight": "The bot assumed a gateway host that was not routable.",
@@ -62,18 +62,6 @@ class FakeLLM:
         self.last_json_system = system
         self.json_calls.append((prompt, system))
         return dict(self.heuristic_payload)
-
-    async def synthesize_document(self, heuristic: ExtractedHeuristic, audit: ExecutionAuditLog) -> DocUpdatePayload:
-        if self.doc_payload is None:
-            self.doc_payload = DocUpdatePayload(
-                payload_id=f"doc-{heuristic.heuristic_id}",
-                title=f"Chronicler Lore: {heuristic.failure_category}",
-                summary=heuristic.insight,
-                content_markdown=f"# Chronicler Lore: {heuristic.failure_category}\n\n{heuristic.generalized_rule}",
-                target_paths=[f"docs/lore/{heuristic.heuristic_id}.md"],
-                heuristic_ids=[heuristic.heuristic_id],
-            )
-        return self.doc_payload
 
 
 class FakeCommitter:

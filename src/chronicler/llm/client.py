@@ -7,10 +7,6 @@ import httpx
 
 from chronicler.config import ChroniclerConfig
 from chronicler.errors import OllamaError
-from chronicler.llm.prompts import DOC_SYNTHESIS_SYSTEM_PROMPT, build_doc_prompt
-from chronicler.schemas import DocUpdatePayload
-from chronicler.schemas.audit_log import ExecutionAuditLog
-from chronicler.schemas.heuristic import ExtractedHeuristic
 
 
 def _strip_json_fence(content: str) -> str:
@@ -88,20 +84,3 @@ class OllamaClient:
         if not isinstance(parsed, dict):
             raise OllamaError("local LLM JSON response was not an object")
         return parsed
-
-    async def synthesize_document(self, heuristic: ExtractedHeuristic, audit: ExecutionAuditLog) -> DocUpdatePayload:
-        """Synthesize a lore doc payload from a learned heuristic + raw audit."""
-        prompt = build_doc_prompt(heuristic, audit)
-        data = await self.ask_for_json(prompt, system=DOC_SYNTHESIS_SYSTEM_PROMPT)
-        payload = DocUpdatePayload.model_validate(
-            {
-                "payload_id": f"doc-{heuristic.heuristic_id}",
-                "title": str(data.get("title") or f"Chronicler Lore: {heuristic.failure_category}"),
-                "summary": str(data.get("summary") or heuristic.insight),
-                "format": data.get("format") or "markdown",
-                "content_markdown": str(data.get("content_markdown") or ""),
-                "target_paths": [f"docs/lore/{heuristic.heuristic_id}.md"],
-                "heuristic_ids": [heuristic.heuristic_id],
-            }
-        )
-        return payload

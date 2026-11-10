@@ -1,100 +1,103 @@
-"""Tests for the runtime configuration defaults.
-
-The defaults used to be absolute paths under one developer's home directory.
-That breaks for every other user and inside the container image, where the
-path does not exist and is not writable. The defaults must be relative to
-the *current* user's home directory, and ``~`` must expand in any value
-supplied through the environment.
-"""
+"""Portable settings use the current user's home and explicit write targets."""
 
 from __future__ import annotations
 
 import os
 from pathlib import Path
 
+import pytest
+from pydantic import ValidationError
+
 from chronicler.config import ChroniclerConfig
 
 
-def test_defaults_are_not_hardcoded_to_a_single_users_home(monkeypatch, tmp_path) -> None:
-    monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.delenv("CHRONICLER_LEDGER_PATH", raising=False)
-    monkeypatch.delenv("CHRONICLER_REPO_ROOT", raising=False)
-    monkeypatch.delenv("CHRONICLER_STATE_PATH", raising=False)
-
-    config = ChroniclerConfig()
-
-    # No default may point into one particular developer's home directory.
-    assert not config.ledger_path.startswith("/Users/")
-    assert not config.state_path.startswith("/Users/")
-    # repo_root tracks the cwd rather than a baked-in absolute path.
-    assert config.repo_root == str(Path.cwd().resolve())
-
-
-def test_state_path_defaults_under_the_users_home(monkeypatch, tmp_path) -> None:
-    monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.delenv("CHRONICLER_STATE_PATH", raising=False)
-
-    config = ChroniclerConfig()
-
-    assert config.state_path == str(tmp_path / ".chronicler" / "state.json")
-
-
-def test_ledger_path_defaults_under_the_users_home(monkeypatch, tmp_path) -> None:
-    monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.delenv("CHRONICLER_LEDGER_PATH", raising=False)
-
-    config = ChroniclerConfig()
-
-    assert config.ledger_path == str(tmp_path / ".taskrivet" / "ledger.sqlite")
-
-
-def test_repo_root_defaults_to_the_current_checkout(monkeypatch, tmp_path) -> None:
-    monkeypatch.delenv("CHRONICLER_REPO_ROOT", raising=False)
+@pytest.fixture(autouse=True)
+def isolated_settings(monkeypatch, tmp_path):
+    for key in os.environ:
+        if key.startswith("CHRONICLER_"):
+            monkeypatch.delenv(key)
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
 
+
+def test_defaults_are_computed_for_each_user_without_creating_paths(monkeypatch, tmp_path):
+    for name in ("first-user", "second-user"):
+        home = tmp_path / name
+        monkeypatch.setattr(Path, "home", lambda home=home: home)
+        config = ChroniclerConfig()
+        assert config.ledger_path == str(home / ".taskrivet" / "ledger.sqlite")
+        assert config.state_path == str(home / ".chronicler" / "state.json")
+        assert config.repo_root is None
+        assert config.git_push is False
+        assert not home.exists()
+
+
+@pytest.mark.parametrize("field", ["ledger_path", "state_path", "repo_root"])
+def test_configured_user_paths_expand_tilde(field, monkeypatch, tmp_path):
+    monkeypatch.setenv(f"CHRONICLER_{field.upper()}", "~/example/path")
     config = ChroniclerConfig()
+    assert getattr(config, field) == str(tmp_path / "home" / "example" / "path")
 
-    assert config.repo_root == str(tmp_path.resolve())
+
+@pytest.mark.parametrize("field", ["ledger_path", "state_path", "repo_root"])
+@pytest.mark.parametrize("value", ["", " ", "\t\n"])
+def test_explicit_blank_paths_are_rejected(field, value):
+    with pytest.raises(ValidationError, match="must not be blank"):
+        ChroniclerConfig(**{field: value})
 
 
-def test_tilde_is_expanded_in_supplied_paths(monkeypatch, tmp_path) -> None:
-    monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setenv("CHRONICLER_LEDGER_PATH", "~/somewhere/ledger.sqlite")
-    monkeypatch.setenv("CHRONICLER_STATE_PATH", "~/state.json")
+def test_explicit_paths_and_push_opt_in_are_preserved(tmp_path):
+    config = ChroniclerConfig(
+        ledger_path=str(tmp_path / "audit.sqlite"),
+        state_path="local-state.json",
+        repo_root="example-repo",
+        git_push=True,
+    )
+    assert config.ledger_path == str(tmp_path / "audit.sqlite")
+    assert config.state_path == "local-state.json"
+    assert config.repo_root == "example-repo"
+    assert config.git_push is True
+    assert config.ollama_base_url == "http://localhost:11434"
+    assert config.ollama_model == "qwen3.8:latest"
 
+
+def test_dotenv_paths_and_explicit_environment_precedence(monkeypatch, tmp_path):
+    (tmp_path / ".env").write_text(
+        'CHRONICLER_REPO_ROOT="~/example-repo"\nCHRONICLER_GIT_PUSH=true\n',
+        encoding="utf-8",
+    )
+    from_file = ChroniclerConfig()
+    assert from_file.repo_root == str(tmp_path / "home" / "example-repo")
+    assert from_file.git_push is True
+    monkeypatch.setenv("CHRONICLER_GIT_PUSH", "false")
+    assert ChroniclerConfig().git_push is False
+
+
+def test_output_paths_remain_repo_relative():
     config = ChroniclerConfig()
+    assert (config.rules_file, config.skills_file, config.lore_dir) == (
+        "RULES.json",
+        "SKILLS.md",
+        "docs/lore",
+    )
 
-    assert config.ledger_path == str(tmp_path / "somewhere" / "ledger.sqlite")
-    assert config.state_path == str(tmp_path / "state.json")
 
-
-def test_absolute_paths_are_left_alone(monkeypatch, tmp_path) -> None:
+def test_absolute_paths_are_left_alone(tmp_path):
     target = tmp_path / "ledger.sqlite"
-    monkeypatch.setenv("CHRONICLER_LEDGER_PATH", str(target))
-
-    config = ChroniclerConfig()
-
+    config = ChroniclerConfig(ledger_path=str(target))
     assert config.ledger_path == str(target)
 
 
-def test_relative_paths_are_kept_relative(monkeypatch, tmp_path) -> None:
-    monkeypatch.delenv("CHRONICLER_RULES_FILE", raising=False)
-    monkeypatch.setenv("CHRONICLER_RULES_FILE", "RULES.json")
-
-    config = ChroniclerConfig()
-
+def test_relative_paths_are_kept_relative():
+    config = ChroniclerConfig(rules_file="RULES.json")
     assert config.rules_file == "RULES.json"
 
 
-def test_container_paths_are_writable(monkeypatch, tmp_path) -> None:
+def test_container_paths_are_writable(tmp_path):
     """The container image runs as a non-root user with a writable data volume."""
     data_dir = tmp_path / "chronicler-data"
     data_dir.mkdir()
-    monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setenv("CHRONICLER_STATE_PATH", str(data_dir / "state.json"))
+    config = ChroniclerConfig(state_path=str(data_dir / "state.json"))
 
-    config = ChroniclerConfig()
-    target = Path(config.state_path)
-
-    assert target.parent.exists()
-    assert os.access(target.parent, os.W_OK)
+    assert config.state_path == str(data_dir / "state.json")
+    assert os.access(Path(config.state_path).parent, os.W_OK)

@@ -16,11 +16,6 @@ def _default_state_path() -> str:
     return str(Path.home() / ".chronicler" / "state.json")
 
 
-def _default_repo_root() -> str:
-    """The checkout the daemon was started in."""
-    return str(Path.cwd())
-
-
 class ChroniclerConfig(BaseSettings):
     """Headless daemon configuration."""
 
@@ -35,8 +30,9 @@ class ChroniclerConfig(BaseSettings):
     ledger_path: str = Field(default_factory=_default_ledger_path)
 
     # Target repository receiving hardened rules + lore docs.
-    # Defaults to the checkout the daemon was started in.
-    repo_root: str = Field(default_factory=_default_repo_root)
+    # Deliberately unset: the daemon must be told where to write rather than
+    # writing into whatever directory it happened to be started in.
+    repo_root: str | None = None
 
     # Paths written inside the target repo
     rules_file: str = "RULES.json"
@@ -52,16 +48,23 @@ class ChroniclerConfig(BaseSettings):
 
     # Git ninja
     git_remote: str = "origin"
-    git_push: bool = True
 
-    @field_validator("ledger_path", "repo_root", "state_path")
+    # Pushing is opt-in. A daemon that silently pushes to a remote repository
+    # every time it learns something is a footgun, not a feature.
+    git_push: bool = False
+
+    @field_validator("ledger_path", "state_path", "repo_root")
     @classmethod
-    def _expand_user(cls, value: str) -> str:
-        """Expand a leading ``~`` so shell-style paths work in the environment.
+    def expand_user_path(cls, value: str | None) -> str | None:
+        """Expand a leading ``~`` and reject blank paths.
 
         Relative paths are left alone: they are resolved against the target
         repository by the committer, not against the daemon's cwd.
         """
+        if value is None:
+            return None
+        if not value.strip():
+            raise ValueError("configured path must not be blank")
         if value.startswith("~"):
             return str(Path(value).expanduser())
         return value

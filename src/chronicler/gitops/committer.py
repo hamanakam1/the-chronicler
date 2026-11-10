@@ -19,10 +19,12 @@ class CommitReceipt(BaseModel):
 
 
 class LocalGitCommitter:
-    """Safely writes files into the target repo and commits + pushes with zero human intervention."""
+    """Write files into the target repo and commit locally, with explicit push opt-in."""
 
-    def __init__(self, repo_root: str, remote: str = "origin", push: bool = True) -> None:
-        self.repo_root = Path(repo_root).resolve()
+    def __init__(self, repo_root: str, remote: str = "origin", push: bool = False) -> None:
+        if not repo_root.strip():
+            raise ValueError("repo_root must not be blank")
+        self.repo_root = Path(repo_root).expanduser().resolve()
         self.remote = remote
         self.push = push
 

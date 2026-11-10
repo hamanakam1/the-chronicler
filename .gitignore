@@ -7,3 +7,28 @@ __pycache__/
 .mypy_cache/
 .env
 chroma/
+
+# Build artefacts
+build/
+dist/
+*.egg
+
+# Test and coverage output
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.pytest_cache/
+
+# Tooling caches
+.tox/
+.nox/
+.cache/
+
+# Editors and OS cruft
+.DS_Store
+.AppleDouble
+.LS_Store
+.idea/
+.vscode/
+*.swp

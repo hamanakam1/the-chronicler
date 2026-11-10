@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 
 from chronicler.ascii_art import CHRONICLER_TAGLINE, render_banner
 from chronicler.cli import build_parser, main
@@ -39,6 +40,27 @@ def test_quiet_is_accepted_before_the_subcommand():
 def test_quiet_defaults_to_false_when_absent():
     parser = build_parser()
     assert getattr(parser.parse_args(["doctor"]), "quiet", False) is False
+
+
+def test_log_level_works_before_and_after_the_subcommand():
+    parser = build_parser()
+    assert parser.parse_args(["--log-level", "debug", "doctor"]).log_level == "debug"
+    assert parser.parse_args(["doctor", "--log-level", "debug"]).log_level == "debug"
+
+
+def test_log_level_falls_back_to_the_environment(monkeypatch):
+    monkeypatch.setenv("CHRONICLER_LOG_LEVEL", "warning")
+    parser = build_parser()
+    args = parser.parse_args(["doctor"])
+    assert getattr(args, "log_level", None) is None
+    # main() resolves the fallback from the environment.
+    assert os.environ["CHRONICLER_LOG_LEVEL"] == "warning"
+
+
+def test_log_level_defaults_to_info(monkeypatch):
+    monkeypatch.delenv("CHRONICLER_LOG_LEVEL", raising=False)
+    parser = build_parser()
+    assert getattr(parser.parse_args(["doctor"]), "log_level", None) is None
 
 
 def test_banner_is_printed_when_not_quiet(capsys, monkeypatch):

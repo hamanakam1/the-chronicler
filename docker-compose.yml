@@ -6,6 +6,7 @@ services:
       - "127.0.0.1:11434:11434"
     volumes:
       - ollama-data:/root/.ollama
+    restart: unless-stopped
 
   chronicler:
     build: .
@@ -18,11 +19,13 @@ services:
       CHRONICLER_LEDGER_PATH: /chronicler/data/ledger.sqlite
       CHRONICLER_RULES_FILE: RULES.json
       CHRONICLER_LORE_DIR: docs/lore
+      CHRONICLER_LOG_LEVEL: info
     volumes:
       - ./:/chronicler
       - chronicler-data:/chronicler/data
     depends_on:
       - ollama
+    restart: unless-stopped
 
 volumes:
   ollama-data:

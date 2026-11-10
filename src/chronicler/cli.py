@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import json
 import logging
+import os
 import sys
 from collections.abc import Sequence
 
@@ -52,8 +53,8 @@ def build_parser() -> argparse.ArgumentParser:
     common.add_argument(
         "--log-level",
         choices=["debug", "info", "warning", "error", "critical"],
-        default="info",
-        help="Verbosity of the daemon log on stderr (default: info).",
+        default=argparse.SUPPRESS,
+        help="Verbosity of the daemon log on stderr (default: info, or $CHRONICLER_LOG_LEVEL).",
     )
 
     parser = argparse.ArgumentParser(
@@ -128,13 +129,17 @@ def configure_logging(level: str) -> None:
         datefmt="%Y-%m-%dT%H:%M:%S",
         stream=sys.stderr,
     )
+    # httpx logs every request at INFO, which would bury the daemon's own
+    # cycle log under transport noise.
+    for noisy in ("httpx", "httpcore", "hpack"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     config = ChroniclerConfig()
-    configure_logging(getattr(args, "log_level", "info"))
+    configure_logging(getattr(args, "log_level", None) or os.environ.get("CHRONICLER_LOG_LEVEL", "info"))
     if not getattr(args, "quiet", False):
         print_banner()
     if args.command == "run":

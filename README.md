@@ -74,7 +74,10 @@ docker pull ghcr.io/hamanakam1/the-chronicler:0.1.0
 docker run --rm ghcr.io/hamanakam1/the-chronicler:0.1.0 doctor
 ```
 
-The image runs as a non-root user. See the
+The image runs as a non-root user and ships with a `HEALTHCHECK` that runs
+`chronicler --quiet doctor`, so the container reports healthy only when the
+local wiring actually checks out. Mount a target checkout and point
+`CHRONICLER_REPO_ROOT` at it. See the
 [package on GitHub](https://github.com/hamanakam1/the-chronicler/pkgs/container/the-chronicler).
 
 ### Docker Compose
@@ -114,7 +117,7 @@ read, what it learned and what it committed:
 | `CHRONICLER_OLLAMA_MODEL` | `qwen3.8:latest` | Local reasoning model |
 | `CHRONICLER_OLLAMA_TIMEOUT_SECONDS` | `120` | Per-request timeout against the local LLM |
 | `CHRONICLER_LEDGER_PATH` | `~/.taskrivet/ledger.sqlite` | Append-only EdgeRecord ledger |
-| `CHRONICLER_REPO_ROOT` | target checkout | Repo receiving hardened rules + docs |
+| `CHRONICLER_REPO_ROOT` | current checkout | Repo receiving hardened rules + docs |
 | `CHRONICLER_RULES_FILE` | `RULES.json` | Hardened ruleset output target |
 | `CHRONICLER_SKILLS_FILE` | `SKILLS.md` | Prompt-context injection output target |
 | `CHRONICLER_LORE_DIR` | `docs/lore` | Generated lore docs location |
@@ -124,8 +127,10 @@ read, what it learned and what it committed:
 | `CHRONICLER_AUDIT_BATCH_LIMIT` | `25` | Max audits per cycle |
 | `CHRONICLER_GIT_REMOTE` | `origin` | Git remote for zero-intervention push |
 | `CHRONICLER_GIT_PUSH` | `true` | Enable automatic push |
+| `CHRONICLER_LOG_LEVEL` | `info` | Daemon log verbosity (overridden by `--log-level`) |
 
-Every variable can also live in a `.env` file next to the checkout.
+Every variable can also live in a `.env` file next to the checkout. A leading
+`~` is expanded, so `CHRONICLER_LEDGER_PATH=~/ledger.sqlite` works.
 
 ## CLI
 

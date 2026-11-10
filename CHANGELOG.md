@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The default paths pointed into one developer's home directory.**
+  `ledger_path`, `repo_root` and `state_path` were hardcoded to
+  `/Users/michaelhamanaka/...`, so the tool was broken for every other user
+  and inside the container image, where that path does not exist and is not
+  writable. The defaults are now resolved against the *current* user's home
+  directory and the current checkout, and a leading `~` in any supplied path
+  is expanded.
 - **Failures are no longer silently skipped.** The ledger reader returned the
   *newest* N failures while the daemon advances a watermark to the newest row
   it has seen. Every failure older than the batch was therefore hidden behind
@@ -41,18 +48,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`--log-level` flag.** Configures daemon verbosity (`debug`, `info`,
   `warning`, `error`, `critical`). The daemon log is written to stderr with
   timestamps; before this, logging was never configured and cycle activity
-  was invisible.
+  was invisible. `CHRONICLER_LOG_LEVEL` sets the same thing from the
+  environment, and the flag wins over the environment.
+- **`HEALTHCHECK` in the container image.** Runs `chronicler --quiet doctor`,
+  so the container reports healthy only when Ollama is reachable, the ledger
+  is readable and the target checkout is a Git repository.
 - **Cycle-level logging.** Each cycle reports how many failures it ingested,
   how many heuristics it learned, how many files it wrote, how many commits
   it made, and how many audits failed.
 - **`ruff` and `mypy` configuration**, plus a `lint` job in CI.
-- **New tests** covering ledger ordering, committer failure modes and
-  per-audit resilience.
+- **New tests** covering ledger ordering, committer failure modes, per-audit
+  resilience and the configuration defaults.
 - **`scripts/build_lowrider_art.py`** regenerates the lowrider ASCII art and
   **`scripts/refresh_readme_art.py`** syncs it into the README.
 - Project metadata in `pyproject.toml`: keywords, classifiers and URLs.
 - Documentation for the CLI, the full configuration surface, and Docker
   Compose.
+- A `restart: unless-stopped` policy in the Compose file, and a `.gitignore`
+  that covers build artefacts, coverage output, editor directories and OS
+  cruft.
 
 ### Changed
 
